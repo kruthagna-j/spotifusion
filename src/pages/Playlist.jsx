@@ -14,13 +14,27 @@ export default function Playlist() {
   const player = usePlayer()
   const navigate = useNavigate()
   const [playlist, setPlaylist] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     return onSnapshot(doc(db, `users/${user.uid}/playlists/${id}`), (snap) => {
       setPlaylist(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+      setLoading(false)
     })
   }, [user, id])
+
+  if (!user) {
+    return <div className="p-6 text-text-muted text-sm">Sign in to view this playlist.</div>
+  }
+
+  if (loading) {
+    return <div className="p-6 text-text-muted text-sm">Loading playlist…</div>
+  }
 
   if (!playlist) {
     return <div className="p-6 text-text-muted">Playlist not found.</div>

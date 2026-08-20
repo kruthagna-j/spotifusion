@@ -3,7 +3,7 @@ import { Plus, Heart, ListMusic } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { usePlaylists } from '@/hooks/useLibraryData'
 import { createPlaylist } from '@/lib/library'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 
 // Mobile-only "Your Library" tab (desktop shows this inside the sidebar instead)
 export default function LibraryMobile() {
@@ -57,7 +57,7 @@ export default function LibraryMobile() {
         </div>
       )}
 
-      <a href="/liked-songs" className="flex items-center gap-3 py-2">
+      <Link to="/liked-songs" className="flex items-center gap-3 py-2">
         <div className="w-12 h-12 rounded bg-gradient-to-br from-indigo-400 to-white flex items-center justify-center shrink-0">
           <Heart size={18} fill="white" className="text-white" />
         </div>
@@ -65,10 +65,10 @@ export default function LibraryMobile() {
           <p className="text-sm font-medium">Liked Songs</p>
           <p className="text-xs text-text-subdued">Playlist</p>
         </div>
-      </a>
+      </Link>
 
       {playlists.map((p) => (
-        <a key={p.id} href={`/playlist/${p.id}`} className="flex items-center gap-3 py-2">
+        <Link key={p.id} to={`/playlist/${p.id}`} className="flex items-center gap-3 py-2">
           <div className="w-12 h-12 rounded bg-surface-highlight flex items-center justify-center shrink-0">
             <ListMusic size={18} className="text-text-subdued" />
           </div>
@@ -76,7 +76,7 @@ export default function LibraryMobile() {
             <p className="text-sm font-medium">{p.name}</p>
             <p className="text-xs text-text-subdued">Playlist • {p.trackIds?.length || 0} songs</p>
           </div>
-        </a>
+        </Link>
       ))}
     </div>
   )

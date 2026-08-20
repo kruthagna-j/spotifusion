@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useRecentlyPlayed, usePlaylists } from '@/hooks/useLibraryData'
 import { usePlayer } from '@/context/PlayerContext'
@@ -9,6 +10,17 @@ function greeting() {
   if (h < 18) return 'Good afternoon'
   return 'Good evening'
 }
+
+// Static browse tiles, shown under the personalized rows — mirrors the
+// genre/mood grid on Spotify's real home tab so the page never feels empty.
+const BROWSE_TILES = [
+  { name: 'Pop', color: 'bg-pink-600' },
+  { name: 'Hip-Hop', color: 'bg-orange-600' },
+  { name: 'Chill', color: 'bg-teal-600' },
+  { name: 'Rock', color: 'bg-red-600' },
+  { name: 'Workout', color: 'bg-lime-600' },
+  { name: 'Focus', color: 'bg-indigo-600' },
+]
 
 export default function Home() {
   const { user, signIn } = useAuth()
@@ -62,9 +74,9 @@ export default function Home() {
           <h2 className="text-xl font-bold mb-4">Your playlists</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
             {playlists.map((p) => (
-              <a
+              <Link
                 key={p.id}
-                href={`/playlist/${p.id}`}
+                to={`/playlist/${p.id}`}
                 className="bg-surface-elevated hover:bg-surface-hover rounded-lg p-3 transition-colors"
               >
                 <div className="aspect-square rounded-md bg-surface-highlight mb-3 flex items-center justify-center text-3xl">
@@ -72,17 +84,32 @@ export default function Home() {
                 </div>
                 <p className="font-semibold text-sm truncate">{p.name}</p>
                 <p className="text-xs text-text-subdued truncate">{p.trackIds?.length || 0} songs</p>
-              </a>
+              </Link>
             ))}
           </div>
         </section>
       )}
 
       {user && recent.length === 0 && playlists.length === 0 && (
-        <p className="text-text-muted text-sm">
+        <p className="text-text-muted text-sm mb-8">
           Search for a song to start listening — it'll show up here once you do.
         </p>
       )}
+
+      <section>
+        <h2 className="text-xl font-bold mb-4">Browse all</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {BROWSE_TILES.map((tile) => (
+            <Link
+              key={tile.name}
+              to="/search"
+              className={`relative aspect-square rounded-lg overflow-hidden p-4 ${tile.color} hover:scale-[1.02] transition-transform`}
+            >
+              <p className="font-bold text-lg text-white">{tile.name}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
