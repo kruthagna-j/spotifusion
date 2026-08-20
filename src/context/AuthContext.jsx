@@ -1,39 +1,32 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { auth, watchAuth, signInWithGoogle, signOut, ensureUserProfile } from '@/lib/firebase'
-import { getRedirectResult } from 'firebase/auth'
+import { createContext, useContext, useEffect, useState } from "react";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { app } from "../lib/firebase"; // adjust path to your firebase config
 
-const AuthContext = createContext(null)
+const AuthContext = createContext();
+const auth = getAuth(app);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined) // undefined = loading, null = signed out
-  const [error, setError] = useState(null)
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // 1. Start with loading true
 
   useEffect(() => {
-    // Completes sign-in when we used signInWithRedirect (Android WebView path)
-    getRedirectResult(auth).catch((err) => setError(err.message))
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false); // 2. Stop loading once Firebase responds
+    });
+    return () => unsubscribe();
+  }, []);
 
-    const unsub = watchAuth(async (u) => {
-      if (u) {
-        await ensureUserProfile(u)
-      }
-      setUser(u)
-    })
-    return unsub
-  }, [])
-
-  const value = {
-    user,
-    loading: user === undefined,
-    error,
-    signIn: () => signInWithGoogle().catch((err) => setError(err.message)),
-    signOut,
+  // 3. Prevent rendering children until loading is finished (stops the flicker!)
+  if (loading) {
+    return <div className="loading-screen">Loading Spotifusion...</div>; 
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
+  return (
+    <AuthContext.Provider value={{ user }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
-}
+export const useAuth = () => useContext(AuthContext);
