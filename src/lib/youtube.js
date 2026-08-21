@@ -1,6 +1,8 @@
-// Client for the /search backend (see functions/src/index.js). Used when the
-// signed-in user hasn't supplied their own YouTube API key.
-const BASE = import.meta.env.VITE_SEARCH_API_BASE
+// By default, calls the free Vercel Serverless Function at /api/search
+// (same origin as the deployed site — no env var needed). If you set
+// VITE_SEARCH_API_BASE, that takes priority (useful if you deploy the
+// backend elsewhere, e.g. a Firebase Cloud Function).
+const BASE = import.meta.env.VITE_SEARCH_API_BASE || '/api'
 const YT_DIRECT_BASE = 'https://www.googleapis.com/youtube/v3'
 
 export async function searchTracks(query, { trustedOnly = true, apiKey = null } = {}) {

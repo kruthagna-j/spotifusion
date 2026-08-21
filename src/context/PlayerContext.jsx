@@ -178,6 +178,66 @@ export function PlayerProvider({ children }) {
     [queue, muted, volume, user]
   )
 
+  // Media Session API: shows Now Playing info on the lock screen / notification
+  // shade, and — crucially — routes Bluetooth headset/earbud hardware buttons
+  // (play/pause/next/previous) and OS media-key presses to our player.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    if (!currentTrack) {
+      navigator.mediaSession.metadata = null
+      navigator.mediaSession.playbackState = 'none'
+      return
+    }
+    navigator.mediaSession.metadata = new window.MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: 'Spotifusion',
+      artwork: currentTrack.thumbnail
+        ? [
+            { src: currentTrack.thumbnail, sizes: '96x96', type: 'image/png' },
+            { src: currentTrack.thumbnail, sizes: '512x512', type: 'image/png' },
+          ]
+        : [],
+    })
+  }, [currentTrack])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+  }, [isPlaying])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.setActionHandler('play', () => togglePlay())
+    navigator.mediaSession.setActionHandler('pause', () => togglePlay())
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious())
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.seekTime != null) seekTo(details.seekTime)
+    })
+    try {
+      if (duration) {
+        navigator.mediaSession.setPositionState({
+          duration,
+          position: Math.min(progress, duration),
+          playbackRate: 1,
+        })
+      }
+    } catch {
+      // Some browsers throw if position > duration transiently; safe to ignore.
+    }
+    return () => {
+      ;['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((action) => {
+        try {
+          navigator.mediaSession.setActionHandler(action, null)
+        } catch {
+          /* no-op */
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue, queueIndex, shuffle, repeatMode, duration, progress])
+
   // Public API -----------------------------------------------------------
 
   function playTrack(track, contextTracks = null) {
