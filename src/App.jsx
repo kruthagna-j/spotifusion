@@ -8,6 +8,7 @@ import Search from '@/pages/Search'
 import LibraryMobile from '@/pages/LibraryMobile'
 import LikedSongs from '@/pages/LikedSongs'
 import Playlist from '@/pages/Playlist'
+import LocalFiles from '@/pages/LocalFiles'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="/library" element={<LibraryMobile />} />
               <Route path="/liked-songs" element={<LikedSongs />} />
               <Route path="/playlist/:id" element={<Playlist />} />
+              <Route path="/local-files" element={<LocalFiles />} />
             </Routes>
           </main>
         </div>

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Search, Library, Plus, Heart, ListMusic } from 'lucide-react'
+import { Home, Search, Library, Plus, Heart, ListMusic, HardDrive } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { usePlaylists } from '@/hooks/useLibraryData'
 
@@ -16,6 +16,7 @@ export default function Sidebar() {
       <nav className="bg-surface rounded-lg p-2">
         <NavItem to="/" icon={<Home size={22} />} label="Home" />
         <NavItem to="/search" icon={<Search size={22} />} label="Search" />
+        <NavItem to="/local-files" icon={<HardDrive size={22} />} label="Local Files" />
       </nav>
 
       {/* Library */}

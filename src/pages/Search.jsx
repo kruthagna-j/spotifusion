@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { Search as SearchIcon } from 'lucide-react'
 import { searchTracks } from '@/lib/youtube'
 import { usePlayer } from '@/context/PlayerContext'
+import { useAuth } from '@/context/AuthContext'
+import { useUserSettings } from '@/hooks/useLibraryData'
 import TrackRow from '@/components/TrackRow'
 
 // simple debounce
@@ -21,6 +23,8 @@ export default function Search() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const player = usePlayer()
+  const { user } = useAuth()
+  const { youtubeApiKey } = useUserSettings(user?.uid)
 
   const runSearch = useCallback(async (q) => {
     if (!q.trim()) {
@@ -30,14 +34,18 @@ export default function Search() {
     setLoading(true)
     setError(null)
     try {
-      const tracks = await searchTracks(q)
+      const tracks = await searchTracks(q, { apiKey: youtubeApiKey })
       setResults(tracks)
     } catch (err) {
-      setError('Could not reach the search backend. Is the Cloud Function running?')
+      setError(
+        youtubeApiKey
+          ? `Your YouTube API key rejected this request: ${err.message}`
+          : 'Could not reach the search backend. Is the Cloud Function deployed?'
+      )
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [youtubeApiKey])
 
   useEffect(() => {
     runSearch(debounced)

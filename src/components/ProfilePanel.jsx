@@ -1,17 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
-import { LogOut, Trash2, X, AlertTriangle } from 'lucide-react'
+import { LogOut, Trash2, X, AlertTriangle, KeyRound, ExternalLink } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { deleteCurrentUserAccount } from '@/lib/firebase'
-import { deleteAllUserData } from '@/lib/library'
+import { deleteAllUserData, setYoutubeApiKey } from '@/lib/library'
+import { useUserSettings } from '@/hooks/useLibraryData'
 import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
 export default function ProfilePanel({ onClose }) {
   const { user, signOut } = useAuth()
+  const { youtubeApiKey } = useUserSettings(user.uid)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState(null)
+  const [keyDraft, setKeyDraft] = useState(youtubeApiKey || '')
+  const [keySaved, setKeySaved] = useState(false)
   const panelRef = useRef(null)
+
+  useEffect(() => {
+    setKeyDraft(youtubeApiKey || '')
+  }, [youtubeApiKey])
 
   useEffect(() => {
     function onClickOutside(e) {
@@ -48,6 +56,12 @@ export default function ProfilePanel({ onClose }) {
     }
   }
 
+  async function handleSaveKey() {
+    await setYoutubeApiKey(user.uid, keyDraft.trim())
+    setKeySaved(true)
+    setTimeout(() => setKeySaved(false), 2000)
+  }
+
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-surface-elevated rounded-lg shadow-2xl border border-border z-40 overflow-hidden" ref={panelRef}>
       <div className="flex items-center justify-between p-4 border-b border-border">
@@ -66,6 +80,39 @@ export default function ProfilePanel({ onClose }) {
         <div className="min-w-0">
           <p className="font-semibold truncate">{user.displayName}</p>
           <p className="text-xs text-text-subdued truncate">{user.email}</p>
+        </div>
+      </div>
+
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center gap-2 mb-2">
+          <KeyRound size={14} className="text-text-muted" />
+          <p className="text-xs font-bold uppercase tracking-wide text-text-muted">Your YouTube API key</p>
+        </div>
+        <p className="text-xs text-text-subdued mb-2">
+          Optional. Use your own free key so search doesn't share a quota with other users.
+        </p>
+        <input
+          type="password"
+          value={keyDraft}
+          onChange={(e) => setKeyDraft(e.target.value)}
+          placeholder="Paste API key here"
+          className="w-full bg-surface-highlight rounded px-3 py-2 text-xs outline-none mb-2"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSaveKey}
+            className="bg-brand text-black text-xs font-bold px-3 py-1.5 rounded-full"
+          >
+            {keySaved ? 'Saved ✓' : 'Save'}
+          </button>
+          <a
+            href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-text-muted hover:text-text flex items-center gap-1"
+          >
+            Get a free key <ExternalLink size={12} />
+          </a>
         </div>
       </div>
 

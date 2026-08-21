@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { watchPlaylists, watchLikedSongs, watchRecentlyPlayed } from '@/lib/library'
+import { watchPlaylists, watchLikedSongs, watchRecentlyPlayed, watchUserSettings } from '@/lib/library'
 
 export function usePlaylists(uid) {
   const [playlists, setPlaylists] = useState([])
@@ -26,4 +26,14 @@ export function useRecentlyPlayed(uid, max = 12) {
     return watchRecentlyPlayed(uid, setTracks, max)
   }, [uid, max])
   return tracks
+}
+
+// Personal YouTube API key + any other future per-user settings.
+export function useUserSettings(uid) {
+  const [settings, setSettings] = useState({})
+  useEffect(() => {
+    if (!uid) return setSettings({})
+    return watchUserSettings(uid, setSettings)
+  }, [uid])
+  return settings
 }

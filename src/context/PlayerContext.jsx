@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { recordPlay } from '@/lib/library'
+import { getLocalTrackBlob } from '@/lib/localLibrary'
 
 const PlayerContext = createContext(null)
 
@@ -31,7 +32,8 @@ export function PlayerProvider({ children }) {
   const apiReady = useYouTubeApi()
   const { user } = useAuth()
   const ytPlayerRef = useRef(null)
-  const containerRef = useRef(null)
+  const localAudioRef = useRef(null)
+  const currentObjectUrl = useRef(null)
   const progressTimer = useRef(null)
 
   const [queue, setQueue] = useState([]) // array of track objects
@@ -45,6 +47,33 @@ export function PlayerProvider({ children }) {
   const [repeatMode, setRepeatMode] = useState('off') // off | all | one
 
   const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
+  const isLocal = currentTrack?.source === 'local'
+
+  // Keep the latest handler in a ref so the <audio> "ended" listener (added
+  // once) always calls the current repeatMode/queue-aware logic.
+  const handleEndedRef = useRef(() => {})
+
+  // Create the (invisible) HTML5 audio element used for local device files.
+  useEffect(() => {
+    const audio = new Audio()
+    audio.preload = 'auto'
+    localAudioRef.current = audio
+
+    const onEnded = () => handleEndedRef.current()
+    const onPlay = () => setIsPlaying(true)
+    const onPause = () => setIsPlaying(false)
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+
+    return () => {
+      audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.pause()
+      if (currentObjectUrl.current) URL.revokeObjectURL(currentObjectUrl.current)
+    }
+  }, [])
 
   // Create the (invisible) YT player once the API script is ready.
   useEffect(() => {
@@ -71,7 +100,7 @@ export function PlayerProvider({ children }) {
           const YTState = window.YT.PlayerState
           if (e.data === YTState.PLAYING) setIsPlaying(true)
           if (e.data === YTState.PAUSED) setIsPlaying(false)
-          if (e.data === YTState.ENDED) handleEnded()
+          if (e.data === YTState.ENDED) handleEndedRef.current()
         },
       },
     })
@@ -80,37 +109,71 @@ export function PlayerProvider({ children }) {
 
   function handleEnded() {
     if (repeatMode === 'one') {
-      ytPlayerRef.current.seekTo(0)
-      ytPlayerRef.current.playVideo()
+      if (isLocal) {
+        localAudioRef.current.currentTime = 0
+        localAudioRef.current.play()
+      } else {
+        ytPlayerRef.current.seekTo(0)
+        ytPlayerRef.current.playVideo()
+      }
       return
     }
     playNext()
   }
+  handleEndedRef.current = handleEnded
 
-  // Poll progress while playing
+  // Poll progress while playing (works for both sources)
   useEffect(() => {
     clearInterval(progressTimer.current)
     if (isPlaying) {
       progressTimer.current = setInterval(() => {
-        const p = ytPlayerRef.current?.getCurrentTime?.() || 0
-        const d = ytPlayerRef.current?.getDuration?.() || 0
-        setProgress(p)
-        setDuration(d)
+        if (isLocal) {
+          setProgress(localAudioRef.current?.currentTime || 0)
+          setDuration(localAudioRef.current?.duration || 0)
+        } else {
+          const p = ytPlayerRef.current?.getCurrentTime?.() || 0
+          const d = ytPlayerRef.current?.getDuration?.() || 0
+          setProgress(p)
+          setDuration(d)
+        }
       }, 500)
     }
     return () => clearInterval(progressTimer.current)
-  }, [isPlaying])
+  }, [isPlaying, isLocal])
 
   const loadAndPlay = useCallback(
-    (index, list = queue) => {
+    async (index, list = queue) => {
       const track = list[index]
-      if (!track || !ytPlayerRef.current?.loadVideoById) return
-      ytPlayerRef.current.loadVideoById(track.id)
-      ytPlayerRef.current.setVolume(muted ? 0 : volume)
+      if (!track) return
       setQueueIndex(index)
-      setIsPlaying(true)
       setProgress(0)
       if (user) recordPlay(user.uid, track)
+
+      if (track.source === 'local') {
+        ytPlayerRef.current?.pauseVideo?.()
+        const blob = await getLocalTrackBlob(track.id)
+        if (!blob) {
+          setIsPlaying(false)
+          return
+        }
+        if (currentObjectUrl.current) URL.revokeObjectURL(currentObjectUrl.current)
+        const url = URL.createObjectURL(blob)
+        currentObjectUrl.current = url
+        const audio = localAudioRef.current
+        audio.src = url
+        audio.volume = muted ? 0 : volume / 100
+        try {
+          await audio.play()
+        } catch {
+          setIsPlaying(false)
+        }
+      } else {
+        localAudioRef.current?.pause()
+        if (!ytPlayerRef.current?.loadVideoById) return
+        ytPlayerRef.current.loadVideoById(track.id)
+        ytPlayerRef.current.setVolume(muted ? 0 : volume)
+        setIsPlaying(true)
+      }
     },
     [queue, muted, volume, user]
   )
@@ -125,6 +188,12 @@ export function PlayerProvider({ children }) {
   }
 
   function togglePlay() {
+    if (isLocal) {
+      if (!localAudioRef.current?.src) return
+      if (isPlaying) localAudioRef.current.pause()
+      else localAudioRef.current.play()
+      return
+    }
     if (!ytPlayerRef.current) return
     if (isPlaying) ytPlayerRef.current.pauseVideo()
     else ytPlayerRef.current.playVideo()
@@ -149,7 +218,9 @@ export function PlayerProvider({ children }) {
     if (!queue.length) return
     // Restart current track if we're more than 3s in (Spotify behavior)
     if (progress > 3) {
-      ytPlayerRef.current.seekTo(0)
+      if (isLocal) localAudioRef.current.currentTime = 0
+      else ytPlayerRef.current.seekTo(0)
+      setProgress(0)
       return
     }
     const prevIndex = queueIndex - 1 < 0 ? (repeatMode === 'all' ? queue.length - 1 : 0) : queueIndex - 1
@@ -157,7 +228,11 @@ export function PlayerProvider({ children }) {
   }
 
   function seekTo(seconds) {
-    ytPlayerRef.current?.seekTo(seconds, true)
+    if (isLocal) {
+      if (localAudioRef.current) localAudioRef.current.currentTime = seconds
+    } else {
+      ytPlayerRef.current?.seekTo(seconds, true)
+    }
     setProgress(seconds)
   }
 
@@ -165,12 +240,14 @@ export function PlayerProvider({ children }) {
     setVolume(v)
     setMuted(false)
     ytPlayerRef.current?.setVolume(v)
+    if (localAudioRef.current) localAudioRef.current.volume = v / 100
   }
 
   function toggleMute() {
     const next = !muted
     setMuted(next)
     ytPlayerRef.current?.setVolume(next ? 0 : volume)
+    if (localAudioRef.current) localAudioRef.current.volume = next ? 0 : volume / 100
   }
 
   function enqueue(track) {

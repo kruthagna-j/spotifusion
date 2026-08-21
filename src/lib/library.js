@@ -22,6 +22,15 @@ import {
 
 const uidPath = (uid) => `users/${uid}`
 
+// ---------- User settings (bring-your-own YouTube API key) ----------
+export function watchUserSettings(uid, callback) {
+  return onSnapshot(doc(db, uidPath(uid)), (snap) => callback(snap.exists() ? snap.data() : {}))
+}
+
+export function setYoutubeApiKey(uid, apiKey) {
+  return setDoc(doc(db, uidPath(uid)), { youtubeApiKey: apiKey || null }, { merge: true })
+}
+
 // ---------- Liked songs ----------
 export function likeSong(uid, track) {
   const ref = doc(db, `${uidPath(uid)}/likedSongs/${track.id}`)
