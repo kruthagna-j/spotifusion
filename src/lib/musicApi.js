@@ -7,7 +7,7 @@
 // URL. Deliberately does NOT default to same-origin '/api', since that path
 // is already used by the existing Vercel function in api/search.js; the two
 // must not collide.
-const API_BASE = import.meta.env.VITE_MUSIC_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_MUSIC_API_URL || 'https://spotifusion.onrender.com'
 
 if (import.meta.env.PROD && !import.meta.env.VITE_MUSIC_API_URL) {
   // Loud, not silent: a deployed build with no configured backend would
@@ -15,7 +15,7 @@ if (import.meta.env.PROD && !import.meta.env.VITE_MUSIC_API_URL) {
   // debugging it wouldn't know why. localhost is a dev-only fallback.
   console.error(
     '[Spotifusion] VITE_MUSIC_API_URL is not set in this production build — ' +
-      'search will try to reach http://localhost:8000, which does not exist ' +
+      'search will try to reach https://spotifusion.onrender.com, which does not exist ' +
       "for anyone but a developer's own machine. Set VITE_MUSIC_API_URL to " +
       'your deployed backend URL in your hosting provider\'s environment variables.'
   )
@@ -43,7 +43,7 @@ export async function searchMusic(query) {
 
   let res
   try {
-    res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`)
+    res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}`)
   } catch {
     throw new Error('Unable to search right now. Please try again.')
   }
@@ -66,7 +66,7 @@ export async function getSong(videoId) {
   if (!videoId) return null
   let res
   try {
-    res = await fetch(`${API_BASE}/song/${encodeURIComponent(videoId)}`)
+    res = await fetch(`${API_BASE}/api/song/${encodeURIComponent(videoId)}`)
   } catch {
     return null
   }
