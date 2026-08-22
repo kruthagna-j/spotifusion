@@ -1,4 +1,4 @@
-import { Play, Pause, Heart, BadgeCheck } from 'lucide-react'
+import { Play, Pause, Heart, BadgeCheck, ListPlus } from 'lucide-react'
 import { usePlayer } from '@/context/PlayerContext'
 import { useAuth } from '@/context/AuthContext'
 import { likeSong, unlikeSong } from '@/lib/library'
@@ -52,6 +52,13 @@ export default function TrackRow({ track, index, contextTracks }) {
         >
           <Heart size={16} className={isLiked ? 'fill-brand text-brand opacity-100' : ''} />
         </button>
+        <button
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => player.playNextInQueue(track)}
+          title="Play next"
+        >
+          <ListPlus size={16} />
+        </button>
         <span className="text-sm w-10 text-right">
           {track.duration ? formatTime(parseDurationLocal(track.duration)) : '--:--'}
         </span>
@@ -61,9 +68,16 @@ export default function TrackRow({ track, index, contextTracks }) {
   )
 }
 
-function parseDurationLocal(iso) {
-  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-  if (!m) return 0
-  const [, h, min, s] = m
-  return (Number(h) || 0) * 3600 + (Number(min) || 0) * 60 + (Number(s) || 0)
+function parseDurationLocal(duration) {
+  if (typeof duration !== 'string') return 0
+  if (duration.startsWith('PT')) {
+    const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+    if (!m) return 0
+    const [, h, min, s] = m
+    return (Number(h) || 0) * 3600 + (Number(min) || 0) * 60 + (Number(s) || 0)
+  }
+  // Plain "M:SS" or "H:MM:SS" string (what ytmusicapi returns)
+  const parts = duration.split(':').map(Number)
+  if (parts.some(Number.isNaN)) return 0
+  return parts.reduce((total, part) => total * 60 + part, 0)
 }

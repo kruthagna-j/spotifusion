@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { LogOut, Trash2, X, AlertTriangle, KeyRound, ExternalLink } from 'lucide-react'
+import { LogOut, Trash2, X, AlertTriangle, KeyRound, ExternalLink, Settings as SettingsIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { deleteCurrentUserAccount } from '@/lib/firebase'
 import { deleteAllUserData, setYoutubeApiKey } from '@/lib/library'
@@ -117,6 +118,15 @@ export default function ProfilePanel({ onClose }) {
       </div>
 
       <div className="p-2">
+        <Link
+          to="/settings"
+          onClick={onClose}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-surface-hover text-sm text-left"
+        >
+          <SettingsIcon size={18} className="text-text-muted" />
+          Settings
+        </Link>
+
         <button
           onClick={signOut}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-surface-hover text-sm text-left"

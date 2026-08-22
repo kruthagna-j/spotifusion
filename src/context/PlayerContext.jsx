@@ -1,9 +1,26 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { recordPlay } from '@/lib/library'
-import { getLocalTrackBlob } from '@/lib/localLibrary'
+import { getLocalSongBlob } from '@/lib/localMusicDb'
 
 const PlayerContext = createContext(null)
+
+// 5-band EQ, standard-ish frequencies. Only applies to local files: YouTube
+// audio plays inside a cross-origin <iframe>, and browsers deliberately
+// block reading/processing audio from a cross-origin source via Web Audio
+// (a security boundary, not a bug) — so there is no technically honest way
+// to apply EQ to YouTube-backed playback. The UI disables EQ for those
+// tracks rather than pretending it works.
+export const EQ_BANDS = [60, 230, 910, 3600, 14000]
+export const EQ_PRESETS = {
+  Flat: [0, 0, 0, 0, 0],
+  Pop: [-1, 2, 3, 2, -1],
+  Rock: [4, 2, -2, 2, 3],
+  Classical: [3, 2, 0, 2, 3],
+  Jazz: [2, 1, -1, 1, 2],
+  'Bass Boost': [6, 4, 0, 0, 0],
+  Vocal: [-2, 0, 3, 3, 0],
+}
 
 // Loads the YouTube IFrame Player API script once.
 function useYouTubeApi() {
@@ -36,6 +53,10 @@ export function PlayerProvider({ children }) {
   const currentObjectUrl = useRef(null)
   const progressTimer = useRef(null)
 
+  // Web Audio graph for the local-file EQ (created lazily, once).
+  const audioCtxRef = useRef(null)
+  const eqFiltersRef = useRef(null)
+
   const [queue, setQueue] = useState([]) // array of track objects
   const [queueIndex, setQueueIndex] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -45,6 +66,8 @@ export function PlayerProvider({ children }) {
   const [muted, setMuted] = useState(false)
   const [shuffle, setShuffle] = useState(false)
   const [repeatMode, setRepeatMode] = useState('off') // off | all | one
+  const [eqGains, setEqGains] = useState(EQ_PRESETS.Flat)
+  const [eqPreset, setEqPreset] = useState('Flat')
 
   const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
   const isLocal = currentTrack?.source === 'local'
@@ -52,6 +75,54 @@ export function PlayerProvider({ children }) {
   // Keep the latest handler in a ref so the <audio> "ended" listener (added
   // once) always calls the current repeatMode/queue-aware logic.
   const handleEndedRef = useRef(() => {})
+
+  // Build the Web Audio graph the first time it's needed: source -> 5x
+  // BiquadFilter (peaking EQ bands) -> destination. createMediaElementSource
+  // can only be called ONCE per <audio> element ever, hence the ref guard.
+  function ensureEqGraph() {
+    if (eqFiltersRef.current) return
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx || !localAudioRef.current) return
+    const ctx = new AudioCtx()
+    const source = ctx.createMediaElementSource(localAudioRef.current)
+    const filters = EQ_BANDS.map((freq, i) => {
+      const filter = ctx.createBiquadFilter()
+      filter.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking'
+      filter.frequency.value = freq
+      filter.Q.value = 1
+      filter.gain.value = eqGains[i]
+      return filter
+    })
+    source.connect(filters[0])
+    for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1])
+    filters[filters.length - 1].connect(ctx.destination)
+    audioCtxRef.current = ctx
+    eqFiltersRef.current = filters
+  }
+
+  function applyEqGains(gains) {
+    eqFiltersRef.current?.forEach((filter, i) => {
+      filter.gain.value = gains[i]
+    })
+  }
+
+  function setEqBand(index, value) {
+    setEqGains((prev) => {
+      const next = [...prev]
+      next[index] = value
+      applyEqGains(next)
+      return next
+    })
+    setEqPreset('Custom')
+  }
+
+  function applyEqPreset(name) {
+    const gains = EQ_PRESETS[name]
+    if (!gains) return
+    setEqGains(gains)
+    setEqPreset(name)
+    applyEqGains(gains)
+  }
 
   // Create the (invisible) HTML5 audio element used for local device files.
   useEffect(() => {
@@ -151,7 +222,7 @@ export function PlayerProvider({ children }) {
 
       if (track.source === 'local') {
         ytPlayerRef.current?.pauseVideo?.()
-        const blob = await getLocalTrackBlob(track.id)
+        const blob = await getLocalSongBlob(track.id)
         if (!blob) {
           setIsPlaying(false)
           return
@@ -163,6 +234,8 @@ export function PlayerProvider({ children }) {
         audio.src = url
         audio.volume = muted ? 0 : volume / 100
         try {
+          ensureEqGraph()
+          await audioCtxRef.current?.resume()
           await audio.play()
         } catch {
           setIsPlaying(false)
@@ -314,6 +387,42 @@ export function PlayerProvider({ children }) {
     setQueue((q) => [...q, track])
   }
 
+  // Insert right after the currently playing track ("Play Next").
+  function playNext_insert(track) {
+    setQueue((q) => {
+      const next = [...q]
+      next.splice(queueIndex + 1, 0, track)
+      return next
+    })
+  }
+
+  function removeFromQueue(index) {
+    setQueue((q) => q.filter((_, i) => i !== index))
+    if (index < queueIndex) setQueueIndex((i) => i - 1)
+  }
+
+  function reorderQueue(fromIndex, toIndex) {
+    setQueue((q) => {
+      const next = [...q]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
+    })
+    setQueueIndex((i) => {
+      if (fromIndex === i) return toIndex
+      if (fromIndex < i && toIndex >= i) return i - 1
+      if (fromIndex > i && toIndex <= i) return i + 1
+      return i
+    })
+  }
+
+  // Clears everything except the currently playing track (matches Spotify's
+  // "Clear queue" behavior — it doesn't stop what's playing).
+  function clearQueue() {
+    setQueue((q) => (queueIndex >= 0 ? [q[queueIndex]] : []))
+    setQueueIndex(queueIndex >= 0 ? 0 : -1)
+  }
+
   const value = {
     queue,
     queueIndex,
@@ -337,6 +446,21 @@ export function PlayerProvider({ children }) {
     cycleRepeat: () =>
       setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')),
     enqueue,
+    playNextInQueue: playNext_insert,
+    removeFromQueue,
+    reorderQueue,
+    clearQueue,
+    // Equalizer — only meaningfully affects playback when isLocal is true.
+    // eqSupported tells the UI whether to disable the controls for the
+    // current track (true for local files, false for YouTube — a real
+    // cross-origin-audio limitation, not a missing feature).
+    eqSupported: isLocal,
+    eqGains,
+    eqPreset,
+    eqBands: EQ_BANDS,
+    eqPresetNames: Object.keys(EQ_PRESETS),
+    setEqBand,
+    applyEqPreset,
   }
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>

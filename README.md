@@ -1,15 +1,18 @@
 # Spotifusion
 
-A free, Spotify-style music app: search pulls tracks from trusted/official
-YouTube channels, playback runs through YouTube's official embedded player
-(no raw audio extraction — that keeps it inside YouTube's Terms of Service),
-auth is Google Sign-In via Firebase, and your library (liked songs,
-playlists, recently played) is saved to Firestore. You can also add your own
-audio files from your device — those play offline, entirely in the browser.
+A free, Spotify-style music app: search pulls tracks from YouTube Music via
+[ytmusicapi](https://github.com/sigma67/ytmusicapi) — a free, key-less,
+unofficial client, so there's no Google API quota or billing dependency for
+search at all — while playback runs through YouTube's official embedded
+player (no raw audio extraction — that keeps it inside YouTube's Terms of
+Service). Auth is Google Sign-In via Firebase, and your library (liked
+songs, playlists, recently played) is saved to Firestore. You can also add
+your own audio files from your device — those play offline, entirely in the
+browser.
 
 **Everything here runs on free tiers — no credit card required anywhere**
-(Firebase Spark plan + Vercel Hobby plan + Google's free YouTube Data API
-quota). No Firebase Cloud Functions / Blaze billing needed.
+(Firebase Spark plan + Vercel Hobby plan + a free-tier host for the small
+Python search backend). See `api/README.md` for the backend specifically.
 
 ## 1. Create your Firebase project
 
@@ -25,29 +28,36 @@ quota). No Firebase Cloud Functions / Blaze billing needed.
    which is included by default). Missing this causes
    `auth/unauthorized-domain` when someone tries to sign in.
 
-## 2. Get a free YouTube Data API key
+## 2. Run the free search backend
 
-1. In the same Google Cloud project (Firebase projects are GCP projects),
-   go to https://console.cloud.google.com/apis/library/youtube.googleapis.com
-   and enable **YouTube Data API v3**.
-2. **APIs & Services → Credentials → Create credentials → API key.**
-   Restrict it to the YouTube Data API v3. This is free (10,000 quota
-   units/day, which is plenty for personal/small-scale use).
+Search now goes through a small self-hosted backend in `api/` (FastAPI +
+[ytmusicapi](https://github.com/sigma67/ytmusicapi) + Redis) instead of the
+official YouTube Data API — no Google API key needed for search at all.
+Full setup/deploy instructions are in **`api/README.md`**; the short version:
 
-## 3. Deploy — the free way (Vercel)
+```bash
+cd api
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
 
-The search backend lives at `/api/search.js` and `/api/video/[id].js` as
-**Vercel Serverless Functions** — these deploy automatically with the rest of
-the site, no separate deploy step, and Vercel's Hobby tier includes them for
-free with no billing card on file.
+Then set `VITE_MUSIC_API_URL` in your frontend `.env` to wherever this runs
+(`http://localhost:8000` for local dev, or your deployed backend URL in
+production — Render/Railway/Fly/a VPS all have free tiers; see
+`api/README.md` for deploying it).
+
+This backend is a standalone Python service, not a Vercel function — it
+needs a persistent Redis connection to scale horizontally, which serverless
+functions aren't a good fit for.
+
+## 3. Deploy the frontend (Vercel)
 
 1. Push this repo to GitHub, then import it in https://vercel.com/new.
 2. In the Vercel project → **Settings → Environment Variables**, add:
-   - `YOUTUBE_API_KEY` = the key from step 2 above (used server-side by
-     `/api/search.js`, never shipped to the browser)
+   - `VITE_MUSIC_API_URL` = wherever you deployed the `api/` backend (step 2)
    - All the `VITE_FIREBASE_*` values from your `.env`
-3. Deploy. That's it — search and playback work immediately, no
-   `VITE_SEARCH_API_BASE` needed (it defaults to same-origin `/api`).
+3. Deploy.
 4. Add the resulting `your-app.vercel.app` domain to Firebase's Authorized
    domains list (step 1.5 above) or sign-in will fail with
    `auth/unauthorized-domain`.
@@ -63,13 +73,12 @@ npm run dev
 locally if you want to test search without deploying first — install with
 `npm i -g vercel`, then `vercel dev`.
 
-## Bring-your-own YouTube API key (per user)
+## Bring-your-own YouTube API key (legacy/optional)
 
-Anyone signed in can open their profile menu (top-right) and paste in their
-**own** free YouTube Data API key. When set, searches run directly from their
-browser against their own quota instead of the shared one — useful if the
-shared key ever hits its daily limit. Stored in their own Firestore user
-document, never shared with other users (see `firestore.rules`).
+This is left over from before the switch to ytmusicapi and no longer affects
+search (ytmusicapi needs no key at all). Anyone signed in can still open
+their profile menu and set a personal YouTube Data API key if you want it
+available for something else later — it's just unused by `Search.jsx` today.
 
 ## Local files (offline, on-device library)
 
@@ -107,16 +116,20 @@ at your deployed `https://your-app.vercel.app` URL; register the generated
 app's SHA-1 fingerprint in Firebase Console → your Android app, so Google
 Sign-In trusts it.
 
-## Optional: Firebase Cloud Function backend instead
+## Legacy: official YouTube Data API path (kept, unused by default)
 
-If you'd rather run the search backend on Firebase instead of Vercel (e.g.
-you're not deploying to Vercel at all), the equivalent Cloud Function still
-exists in `functions/src/index.js`. Note this **requires the Blaze
-(pay-as-you-go) plan** to deploy at all, even though usage itself stays free
-under normal quotas — that's a Firebase requirement for any Cloud Function,
-not a cost of this app. Deploy with `firebase deploy --only functions`, then
-set `VITE_SEARCH_API_BASE` to the printed function URL to use it instead of
-the default `/api` path.
+The original key-based search implementation is still in the repo,
+untouched, in case you want it as a fallback:
+
+- `functions/src/index.js` — Firebase Cloud Function version (needs Blaze billing to deploy)
+- `api/search.js` / `api/video/[id].js` — Vercel serverless function version (free, no billing needed)
+- `src/lib/youtube.js` — the matching frontend client
+
+None of these are called by `Search.jsx` anymore — it now uses
+`src/lib/musicApi.js` against the ytmusicapi backend in `api/` (Python)
+described above. To switch back, point `Search.jsx` at `searchTracks` from
+`lib/youtube.js` instead of `searchMusic` from `lib/musicApi.js`, and set
+`VITE_SEARCH_API_BASE` + a YouTube Data API key as before.
 
 ## What's built vs. what's next
 

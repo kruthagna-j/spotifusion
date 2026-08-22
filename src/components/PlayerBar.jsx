@@ -11,18 +11,21 @@ import {
   VolumeX,
   Heart,
   ChevronDown,
+  ListMusic,
 } from 'lucide-react'
 import { usePlayer } from '@/context/PlayerContext'
 import { useAuth } from '@/context/AuthContext'
 import { likeSong, unlikeSong } from '@/lib/library'
 import { useLikedSongs } from '@/hooks/useLibraryData'
 import { formatTime } from '@/lib/youtube'
+import QueuePanel from '@/components/QueuePanel'
 
 export default function PlayerBar() {
   const player = usePlayer()
   const { user } = useAuth()
   const liked = useLikedSongs(user?.uid)
   const [expanded, setExpanded] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(false)
   const { currentTrack } = player
 
   const isLiked = !!currentTrack && liked.some((t) => t.id === currentTrack.id)
@@ -132,7 +135,15 @@ export default function PlayerBar() {
           <SeekBar player={player} compact />
         </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="relative flex items-center justify-end gap-2">
+          <button
+            onClick={() => setQueueOpen((o) => !o)}
+            title="Queue"
+            className={queueOpen ? 'text-brand' : 'text-text-muted hover:text-text'}
+          >
+            <ListMusic size={18} />
+          </button>
+          {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
           <button onClick={player.toggleMute}>
             {player.muted || player.volume === 0 ? (
               <VolumeX size={18} className="text-text-muted" />
