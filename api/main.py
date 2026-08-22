@@ -35,7 +35,7 @@ logger = logging.getLogger("spotifusion.api")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    for origin in os.getenv("ALLOWED_ORIGINS", "https://spotifusion.onrender.com").split(",")
     if origin.strip()
 ]
 
