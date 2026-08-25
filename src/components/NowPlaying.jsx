@@ -59,8 +59,13 @@ export default function NowPlaying() {
     return lyricsState.data.lines.map((l) => ({ time: l.startTimeSeconds, text: l.text }))
   }, [lyricsState])
   const activeLyric = useMemo(() => {
-    let idx = -1
-    syncedLines.forEach((line, i) => { if (line.time <= player.progress) idx = i })
+    // Sorted timestamps allow O(log n) lookup instead of scanning every line.
+    let lo = 0, hi = syncedLines.length - 1, idx = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (syncedLines[mid].time <= player.progress) { idx = mid; lo = mid + 1 }
+      else hi = mid - 1
+    }
     return idx
   }, [syncedLines, player.progress])
 

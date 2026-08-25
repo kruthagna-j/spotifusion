@@ -1,10 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { recordPlay } from '@/lib/library'
 import { getLocalSongBlob } from '@/lib/localMusicDb'
 import { isPrivateSession } from '@/lib/privacySettings'
 
 const PlayerContext = createContext(null)
+const PlayerRowContext = createContext(null)
 
 // 5-band EQ, standard-ish frequencies. Only applies to local files: YouTube
 // audio plays inside a cross-origin <iframe>, and browsers deliberately
@@ -54,6 +55,7 @@ export function PlayerProvider({ children }) {
   const currentObjectUrl = useRef(null)
   const progressTimer = useRef(null)
   const sleepTimerRef = useRef(null)
+  const shuffleStateRef = useRef({ order: [], position: -1 })
 
   // Web Audio graph for the local-file EQ (created lazily, once).
   const audioCtxRef = useRef(null)
@@ -347,11 +349,22 @@ export function PlayerProvider({ children }) {
 
   // Public API -----------------------------------------------------------
 
+  function resetShuffleOrder(length = queue.length, currentIndex = queueIndex) {
+    const indices = []
+    for (let i = 0; i < length; i++) if (i !== currentIndex) indices.push(i)
+    // Fisher-Yates: O(n), unbiased, and avoids repeated random picks.
+    for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]] }
+    shuffleStateRef.current = { order: indices, position: -1 }
+  }
+
   function playTrack(track, contextTracks = null) {
     const list = contextTracks || [track]
     const idx = list.findIndex((t) => t.id === track.id)
+    const nextIndex = idx === -1 ? 0 : idx
     setQueue(list)
-    loadAndPlay(idx === -1 ? 0 : idx, list)
+    if (shuffle) resetShuffleOrder(list.length, nextIndex)
+    else shuffleStateRef.current = { order: [], position: -1 }
+    loadAndPlay(nextIndex, list)
   }
 
   function togglePlay() {
@@ -370,7 +383,15 @@ export function PlayerProvider({ children }) {
     if (!queue.length) return
     let nextIndex
     if (shuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length)
+      const state = shuffleStateRef.current
+      if (!state.order.length || state.position >= state.order.length - 1) {
+        if (state.position >= 0 && repeatMode !== 'all') return setIsPlaying(false)
+        resetShuffleOrder(queue.length, queueIndex)
+      }
+      const nextState = shuffleStateRef.current
+      nextState.position += 1
+      nextIndex = nextState.order[nextState.position]
+      if (nextIndex == null) return setIsPlaying(false)
     } else {
       nextIndex = queueIndex + 1
       if (nextIndex >= queue.length) {
@@ -389,6 +410,10 @@ export function PlayerProvider({ children }) {
       else ytPlayerRef.current.seekTo(0)
       setProgress(0)
       return
+    }
+    if (shuffle) {
+      const state = shuffleStateRef.current
+      if (state.position > 0) { state.position -= 1; loadAndPlay(state.order[state.position]); return }
     }
     const prevIndex = queueIndex - 1 < 0 ? (repeatMode === 'all' ? queue.length - 1 : 0) : queueIndex - 1
     loadAndPlay(prevIndex)
@@ -464,18 +489,10 @@ export function PlayerProvider({ children }) {
     setOutputDeviceLabel(null)
   }
 
-  function enqueue(track) {
-    setQueue((q) => [...q, track])
-  }
+  function enqueue(track) { setQueue((q) => { const next=[...q,track]; if(shuffle) resetShuffleOrder(next.length,queueIndex); return next }) }
 
   // Insert right after the currently playing track ("Play Next").
-  function playNext_insert(track) {
-    setQueue((q) => {
-      const next = [...q]
-      next.splice(queueIndex + 1, 0, track)
-      return next
-    })
-  }
+  function playNext_insert(track) { setQueue((q) => { const next=[...q]; next.splice(queueIndex+1,0,track); if(shuffle) resetShuffleOrder(next.length,queueIndex); return next }) }
 
   function removeFromQueue(index) {
     setQueue((q) => q.filter((_, i) => i !== index))
@@ -496,6 +513,14 @@ export function PlayerProvider({ children }) {
       return i
     })
   }
+
+  // Low-frequency context for track rows. It excludes progress/duration so
+  // large lists do not re-render every 500ms.
+  const rowPlayTrack = useCallback((track, contextTracks = null) => playTrack(track, contextTracks), [loadAndPlay, shuffle])
+  const rowTogglePlay = useCallback(() => togglePlay(), [isLocal, isPlaying])
+  const rowPlayNextInQueue = useCallback((track) => playNext_insert(track), [queueIndex, shuffle])
+  const rowOpenNowPlaying = useCallback(() => setNowPlayingOpen(true), [])
+  const rowValue = useMemo(() => ({ currentTrackId: currentTrack?.id ?? null, isPlaying, playTrack: rowPlayTrack, togglePlay: rowTogglePlay, playNextInQueue: rowPlayNextInQueue, openNowPlaying: rowOpenNowPlaying }), [currentTrack?.id, isPlaying, rowPlayTrack, rowTogglePlay, rowPlayNextInQueue, rowOpenNowPlaying])
 
   // Clears everything except the currently playing track (matches Spotify's
   // "Clear queue" behavior — it doesn't stop what's playing).
@@ -523,7 +548,7 @@ export function PlayerProvider({ children }) {
     seekTo,
     changeVolume,
     toggleMute,
-    toggleShuffle: () => setShuffle((s) => !s),
+    toggleShuffle: () => setShuffle((s) => { const next=!s; if(next) resetShuffleOrder(queue.length,queueIndex); else shuffleStateRef.current={order:[],position:-1}; return next }),
     cycleRepeat: () =>
       setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')),
     enqueue,
@@ -556,11 +581,8 @@ export function PlayerProvider({ children }) {
     clearSleepTimer,
   }
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+  return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={rowValue}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
 }
 
-export function usePlayer() {
-  const ctx = useContext(PlayerContext)
-  if (!ctx) throw new Error('usePlayer must be used within PlayerProvider')
-  return ctx
-}
+export function usePlayer() { const ctx=useContext(PlayerContext); if(!ctx) throw new Error('usePlayer must be used within PlayerProvider'); return ctx }
+export function usePlayerRow() { const ctx=useContext(PlayerRowContext); if(!ctx) throw new Error('usePlayerRow must be used within PlayerProvider'); return ctx }

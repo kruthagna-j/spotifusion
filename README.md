@@ -158,3 +158,10 @@ Before deployment, set the `VITE_FIREBASE_*` values and `VITE_MUSIC_API_URL` in 
 The FastAPI service must have `FIREBASE_PROJECT_ID` configured and must allow the deployed frontend origin through `ALLOWED_ORIGINS`. Firebase Authentication must list every domain you actually use under Authorized domains.
 
 The project deliberately does not download or rip YouTube audio. Online playback uses the official YouTube IFrame Player, while offline playback is for audio files supplied by the user.
+
+
+## Production scaling notes
+
+The frontend uses a 500 ms search debounce, a bounded client LRU cache, and request coalescing. The API uses per-user rate limits, a local LRU in front of shared Redis, cache-stampede protection, and bounded upstream concurrency. For large deployments, run multiple API instances behind a load balancer and point all instances at the same managed Redis. Set `VITE_MUSIC_API_URL` to the deployed API origin in Vercel.
+
+Important: a high customer rate limit is not an unlimited upstream quota. Cache hits do not contact YouTube Music; cold unique queries still require upstream work.

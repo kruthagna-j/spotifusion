@@ -1,65 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { watchPlaylists, watchLikedSongs, watchRecentlyPlayed } from '@/lib/library'
 
-export function usePlaylists(uid) {
-  const [playlists, setPlaylists] = useState([])
-  useEffect(() => {
-    if (!uid) return setPlaylists([])
-    return watchPlaylists(uid, setPlaylists)
-  }, [uid])
-  return playlists
+// Share one Firestore listener per user/resource instead of creating one from
+'the row. This prevents O(rows) listeners and keeps library updates bounded.
+const stores=new Map()
+const EMPTY_ARRAY=Object.freeze([])
+function getStore(key,subscribeFactory,emptyValue){
+  let store=stores.get(key); if(store) return store
+  store={value:emptyValue,listeners:new Set(),unsubscribe:null,refCount:0,initialized:false,
+    subscribe(listener){
+      store.listeners.add(listener); store.refCount++
+      if(!store.unsubscribe) store.unsubscribe=subscribeFactory(next=>{store.value=next;store.initialized=true;store.listeners.forEach(fn=>fn())})
+      return ()=>{store.listeners.delete(listener);store.refCount--;if(store.refCount<=0&&store.unsubscribe){store.unsubscribe();store.unsubscribe=null;store.refCount=0}}
+    },
+    getSnapshot(){return store.value}
+  }
+  stores.set(key,store); return store
 }
-
-export function useLikedSongs(uid) {
-  const [tracks, setTracks] = useState([])
-  useEffect(() => {
-    if (!uid) return setTracks([])
-    return watchLikedSongs(uid, setTracks)
-  }, [uid])
-  return tracks
+function useSharedResource(uid,kind,subscribeFactory,emptyValue){
+  const store=useMemo(()=>uid?getStore(`${kind}:${uid}`,subscribeFactory,emptyValue):null,[uid,kind])
+  return useSyncExternalStore(store?store.subscribe:()=>()=>{},store?store.getSnapshot:()=>emptyValue,()=>emptyValue)
 }
-
-export function useRecentlyPlayed(uid, max = 12) {
-  const [tracks, setTracks] = useState([])
-  useEffect(() => {
-    if (!uid) return setTracks([])
-    return watchRecentlyPlayed(uid, setTracks, max)
-  }, [uid, max])
-  return tracks
-}
-
-// ---- Status-aware variants (data + loading), for pages that want a real
-// skeleton state instead of treating "still waiting on Firestore" the same
-// as "genuinely has nothing yet". Kept separate from the hooks above so
-// existing call sites (Sidebar, LibraryMobile, AddToPlaylistMenu, ...) don't
-// need to change how they destructure the result. ----
-
-export function usePlaylistsStatus(uid) {
-  const [state, setState] = useState({ data: [], loading: !!uid })
-  useEffect(() => {
-    if (!uid) return setState({ data: [], loading: false })
-    setState((s) => ({ ...s, loading: true }))
-    return watchPlaylists(uid, (data) => setState({ data, loading: false }))
-  }, [uid])
-  return state
-}
-
-export function useLikedSongsStatus(uid) {
-  const [state, setState] = useState({ data: [], loading: !!uid })
-  useEffect(() => {
-    if (!uid) return setState({ data: [], loading: false })
-    setState((s) => ({ ...s, loading: true }))
-    return watchLikedSongs(uid, (data) => setState({ data, loading: false }))
-  }, [uid])
-  return state
-}
-
-export function useRecentlyPlayedStatus(uid, max = 12) {
-  const [state, setState] = useState({ data: [], loading: !!uid })
-  useEffect(() => {
-    if (!uid) return setState({ data: [], loading: false })
-    setState((s) => ({ ...s, loading: true }))
-    return watchRecentlyPlayed(uid, (data) => setState({ data, loading: false }), max)
-  }, [uid, max])
-  return state
-}
+export function usePlaylists(uid){return useSharedResource(uid,'playlists',cb=>watchPlaylists(uid,cb),EMPTY_ARRAY)}
+export function useLikedSongs(uid){return useSharedResource(uid,'likedSongs',cb=>watchLikedSongs(uid,cb),EMPTY_ARRAY)}
+export function useLikedSongIds(uid){const liked=useLikedSongs(uid);return useMemo(()=>new Set(liked.map(t=>t.id)),[liked])}
+export function useRecentlyPlayed(uid,max=12){return useSharedResource(uid,`recentlyPlayed:${max}`,cb=>watchRecentlyPlayed(uid,cb,max),EMPTY_ARRAY)}
+export function usePlaylistsStatus(uid){const data=usePlaylists(uid);const store=uid?stores.get(`playlists:${uid}`):null;return {data,loading:!!uid&&!store?.initialized}}
+export function useLikedSongsStatus(uid){const data=useLikedSongs(uid);const store=uid?stores.get(`likedSongs:${uid}`):null;return {data,loading:!!uid&&!store?.initialized}}
+export function useRecentlyPlayedStatus(uid,max=12){const data=useRecentlyPlayed(uid,max);const store=uid?stores.get(`recentlyPlayed:${max}:${uid}`):null;return {data,loading:!!uid&&!store?.initialized}}

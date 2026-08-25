@@ -1,68 +1,77 @@
-"""
-Thin Redis cache wrapper for search results.
+"""Fast two-tier cache used by the music API.
 
-Design requirement from spec: the API must keep working if Redis is down —
-connection/get/set errors are logged and swallowed, never raised, so a
-missing/unreachable Redis degrades to "always cache miss" instead of crashing
-requests.
+Redis is the shared cache for horizontally scaled instances. A small in-process
+LRU/TTL cache sits in front of Redis so hot requests can be answered without a
+network hop. Cache failures are intentionally non-fatal.
 """
-import json
-import logging
-import os
+from __future__ import annotations
+import json, logging, os, threading, time
+from collections import OrderedDict
 from typing import Any, Optional
 
 logger = logging.getLogger("spotifusion.cache")
-
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))
-
+CACHE_TTL = int(os.getenv("CACHE_TTL", "21600"))
+LOCAL_CACHE_MAX = int(os.getenv("LOCAL_CACHE_MAX", "2048"))
+LOCAL_CACHE_TTL = int(os.getenv("LOCAL_CACHE_TTL", "900"))
 _client = None
 _client_init_failed = False
-
+_client_lock = threading.Lock()
+_memory: OrderedDict[str, tuple[float, Any]] = OrderedDict()
+_memory_lock = threading.Lock()
 
 def _get_client():
-    """Lazily create the Redis client. Returns None if Redis is unavailable."""
     global _client, _client_init_failed
-    if _client is not None:
-        return _client
-    if _client_init_failed:
-        return None
-    try:
-        import redis  # imported lazily so the app still starts without the package during local hacking
-
-        client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
-        client.ping()
-        _client = client
-        logger.info("Connected to Redis at %s", REDIS_URL)
-        return _client
-    except Exception as exc:  # noqa: BLE001 - intentionally broad: cache must never take the API down
-        _client_init_failed = True
-        logger.warning("Redis unavailable (%s) — continuing without cache.", exc)
-        return None
-
+    if _client is not None: return _client
+    if _client_init_failed: return None
+    with _client_lock:
+        if _client is not None: return _client
+        if _client_init_failed: return None
+        try:
+            import redis
+            client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=1, socket_timeout=1, health_check_interval=30, decode_responses=True)
+            client.ping()
+            _client = client
+            logger.info("Connected to Redis at %s", REDIS_URL)
+        except Exception as exc:
+            _client_init_failed = True
+            logger.warning("Redis unavailable (%s) — using local cache only.", exc)
+    return _client
 
 def normalize_key(prefix: str, value: str) -> str:
-    """e.g. normalize_key('search', 'Blinding Lights') -> 'search:blinding lights'"""
-    return f"{prefix}:{value.strip().lower()}"
+    normalized = " ".join(value.strip().lower().split())
+    return f"{prefix}:{normalized}"
 
+def _memory_get(key: str) -> Optional[Any]:
+    now=time.monotonic()
+    with _memory_lock:
+        item=_memory.get(key)
+        if item is None: return None
+        expires,value=item
+        if expires <= now:
+            _memory.pop(key,None); return None
+        _memory.move_to_end(key); return value
+
+def _memory_set(key: str, value: Any, ttl: int) -> None:
+    with _memory_lock:
+        _memory[key]=(time.monotonic()+ttl,value); _memory.move_to_end(key)
+        while len(_memory)>LOCAL_CACHE_MAX: _memory.popitem(last=False)
 
 def get_json(key: str) -> Optional[Any]:
-    client = _get_client()
-    if client is None:
-        return None
+    local=_memory_get(key)
+    if local is not None: return local
+    client=_get_client()
+    if client is None: return None
     try:
-        raw = client.get(key)
-        return json.loads(raw) if raw else None
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Redis GET failed for key=%s: %s", key, exc)
-        return None
+        raw=client.get(key)
+        if not raw: return None
+        value=json.loads(raw); _memory_set(key,value,LOCAL_CACHE_TTL); return value
+    except Exception as exc:
+        logger.warning("Redis GET failed for key=%s: %s",key,exc); return None
 
-
-def set_json(key: str, value: Any, ttl: int = CACHE_TTL) -> None:
-    client = _get_client()
-    if client is None:
-        return
-    try:
-        client.setex(key, ttl, json.dumps(value))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Redis SET failed for key=%s: %s", key, exc)
+def set_json(key: str, value: Any, ttl: int=CACHE_TTL) -> None:
+    _memory_set(key,value,min(ttl,LOCAL_CACHE_TTL))
+    client=_get_client()
+    if client is None: return
+    try: client.setex(key,ttl,json.dumps(value,separators=(",",":")))
+    except Exception as exc: logger.warning("Redis SET failed for key=%s: %s",key,exc)

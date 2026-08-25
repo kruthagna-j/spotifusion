@@ -42,7 +42,7 @@ export default function Search() {
   const { user, signIn } = useAuth()
   const location = useLocation()
   const [query, setQuery] = useState(location.state?.query || '')
-  const debounced = useDebouncedValue(query, 400)
+  const debounced = useDebouncedValue(query, 500)
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -56,7 +56,7 @@ export default function Search() {
   // see src/lib/musicApi.js. No API key needed here anymore.
   const runSearch = useCallback(async (q) => {
     if (!user) return // gated below the sign-in wall too; belt-and-braces
-    if (!q.trim()) {
+    if (q.trim().length < 2) {
       setResults([])
       return
     }

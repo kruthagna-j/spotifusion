@@ -79,11 +79,7 @@ After deploying, set `VITE_MUSIC_API_URL` in the frontend's environment
 - `GET /api/search?q=...` — search songs, returns `{ query, results, cached }`
 - `GET /api/song/{video_id}` — single track metadata lookup
 
-Artist/album/playlist/lyrics endpoints were intentionally left out: they
-aren't used anywhere in the current frontend, and ytmusicapi's lyrics
-endpoint specifically is unreliable enough (frequent rate limits/missing
-data) that shipping it wouldn't be worth the added surface area. Straightforward
-to add later following the same pattern as `/api/song` if a page needs them.
+Lyrics are wired through `/api/lyrics/{video_id}` and cached. Artist/album/playlist pages remain frontend-derived from catalog results.
 
 ## Limitations
 
