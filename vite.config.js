@@ -2,7 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import path from 'path'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [
@@ -28,8 +31,6 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Never intercept our own API routes or third-party audio/YouTube
-        // requests — only the built app shell (JS/CSS/HTML/icons) is cached.
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
@@ -42,8 +43,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(rootDir, 'src'),
     },
+  },
+  build: {
+    target: 'es2022',
+    cssMinify: 'lightningcss',
   },
   server: {
     host: true,
