@@ -11,7 +11,6 @@ upstream concurrency bounded while allowing generous customer request limits.
 """
 from __future__ import annotations
 import hashlib, logging, os, threading
-from collections import defaultdict
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,11 +22,11 @@ from services import ytmusic
 
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger("spotifusion.api")
-RATE_LIMIT_PER_MINUTE=int(os.getenv("RATE_LIMIT_PER_MINUTE","300"))
+RATE_LIMIT_PER_MINUTE=int(os.getenv("RATE_LIMIT_PER_MINUTE","600"))
 SEARCH_RATE_LIMIT=os.getenv("SEARCH_RATE_LIMIT",f"{RATE_LIMIT_PER_MINUTE}/minute")
-SONG_RATE_LIMIT=os.getenv("SONG_RATE_LIMIT",f"{max(RATE_LIMIT_PER_MINUTE,600)}/minute")
-LYRICS_RATE_LIMIT=os.getenv("LYRICS_RATE_LIMIT","120/minute")
-UPSTREAM_CONCURRENCY=int(os.getenv("UPSTREAM_CONCURRENCY","8"))
+SONG_RATE_LIMIT=os.getenv("SONG_RATE_LIMIT",f"{max(RATE_LIMIT_PER_MINUTE,1200)}/minute")
+LYRICS_RATE_LIMIT=os.getenv("LYRICS_RATE_LIMIT","300/minute")
+UPSTREAM_CONCURRENCY=int(os.getenv("UPSTREAM_CONCURRENCY","16"))
 ALLOWED_ORIGINS=[o.strip() for o in os.getenv("ALLOWED_ORIGINS","http://localhost:5173,http://127.0.0.1:5173,https://spotifusion.vercel.app").split(",") if o.strip()]
 
 def _rate_key(request: Request)->str:
@@ -43,24 +42,67 @@ app.state.limiter=limiter
 app.add_exception_handler(RateLimitExceeded,_rate_limit_exceeded_handler)
 app.add_middleware(CORSMiddleware,allow_origins=ALLOWED_ORIGINS,allow_credentials=False,allow_methods=["GET","OPTIONS"],allow_headers=["*"])
 _upstream_gate=threading.BoundedSemaphore(max(1,UPSTREAM_CONCURRENCY))
-_key_locks:dict[str,threading.Lock]=defaultdict(threading.Lock)
-_key_locks_guard=threading.Lock(); _MAX_KEY_LOCKS=4096
-
-def _key_lock(key:str)->threading.Lock:
-    with _key_locks_guard:
-        if len(_key_locks)>=_MAX_KEY_LOCKS: return _key_locks.setdefault("__overflow__",threading.Lock())
-        return _key_locks[key]
+_inflight:dict[str,threading.Event]={}
+_inflight_results:dict[str,tuple[object,bool,Exception|None]]={}
+_inflight_guard=threading.Lock()
+_MAX_INFLIGHT=8192
 
 def _cached_upstream(key,loader,*,ttl=cache.CACHE_TTL):
+    """Cache-first single-flight loader.
+
+    Only the first request for a cold key reaches the upstream service.
+    Concurrent callers wait for that result instead of creating duplicate
+    upstream traffic. The semaphore additionally caps total upstream work.
+    """
     cached=cache.get_json(key)
-    if cached is not None: return cached,True
-    lock=_key_lock(key)
-    with lock:
+    if cached is not None:
+        return cached,True
+
+    with _inflight_guard:
+        event=_inflight.get(key)
+        owner=event is None
+        if owner:
+            if len(_inflight)>=_MAX_INFLIGHT:
+                # Avoid unbounded memory growth under a malicious/high-cardinality burst.
+                # This request becomes an owner without being registered.
+                event=None
+            else:
+                event=threading.Event()
+                _inflight[key]=event
+
+    if not owner:
+        event.wait(timeout=int(os.getenv("SINGLEFLIGHT_TIMEOUT","30")))
         cached=cache.get_json(key)
-        if cached is not None: return cached,True
-        with _upstream_gate: value=loader()
+        if cached is not None:
+            return cached,True
+        with _inflight_guard:
+            result=_inflight_results.pop(key,None)
+        if result is not None:
+            value,was_cached,error=result
+            if error is not None:
+                raise error
+            return value,was_cached
+        # Owner may have timed out/failed to publish; retry once as a new request.
+        return _cached_upstream(key,loader,ttl=ttl)
+
+    outcome=(None,False,None)
+    try:
+        with _upstream_gate:
+            value=loader()
         cache.set_json(key,value,ttl=ttl)
+        outcome=(value,False,None)
         return value,False
+    except Exception as exc:
+        outcome=(None,False,exc)
+        raise
+    finally:
+        if event is not None:
+            with _inflight_guard:
+                _inflight_results[key]=outcome
+                _inflight.pop(key,None)
+                event.set()
+                if len(_inflight_results)>_MAX_INFLIGHT:
+                    _inflight_results.pop(next(iter(_inflight_results)),None)
 
 @app.get("/")
 def root(): return {"service":"spotifusion-music-api","status":"ok","version":"2.0.0","docs":"/docs"}

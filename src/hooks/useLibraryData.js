@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore } from 'react'
 import { watchPlaylists, watchLikedSongs, watchRecentlyPlayed } from '@/lib/library'
 
 // Share one Firestore listener per user/resource instead of creating one from
-'the row. This prevents O(rows) listeners and keeps library updates bounded.
+// row-level listeners. This prevents O(rows) listeners and keeps library updates bounded.
 const stores=new Map()
 const EMPTY_ARRAY=Object.freeze([])
 function getStore(key,subscribeFactory,emptyValue){
@@ -11,7 +11,7 @@ function getStore(key,subscribeFactory,emptyValue){
     subscribe(listener){
       store.listeners.add(listener); store.refCount++
       if(!store.unsubscribe) store.unsubscribe=subscribeFactory(next=>{store.value=next;store.initialized=true;store.listeners.forEach(fn=>fn())})
-      return ()=>{store.listeners.delete(listener);store.refCount--;if(store.refCount<=0&&store.unsubscribe){store.unsubscribe();store.unsubscribe=null;store.refCount=0}}
+      return ()=>{store.listeners.delete(listener);store.refCount--;if(store.refCount<=0&&store.unsubscribe){store.unsubscribe();store.unsubscribe=null;store.refCount=0;stores.delete(key)}}
     },
     getSnapshot(){return store.value}
   }
