@@ -11,6 +11,7 @@ import { useLikedSongs } from '@/hooks/useLibraryData'
 import { formatTime } from '@/lib/timeFormat'
 import { getLyrics } from '@/lib/musicApi'
 import QueuePanel from '@/components/QueuePanel'
+import { getArtwork, artworkSrcSet } from '@/lib/artwork'
 
 // Real lyrics fetched from the backend (ytmusicapi) — see useLyrics below.
 // Local files never have lyrics available (no metadata source for them);
@@ -51,6 +52,7 @@ export default function NowPlaying() {
   const liked = useLikedSongs(user?.uid)
   const [tab, setTab] = useState('lyrics')
   const [sleepOpen, setSleepOpen] = useState(false)
+  const activeLyricRef = useRef(null)
   const current = player.currentTrack
   const isLiked = !!current && liked.some((t) => t.id === current.id)
   const lyricsState = useLyrics(current)
@@ -69,6 +71,10 @@ export default function NowPlaying() {
     return idx
   }, [syncedLines, player.progress])
 
+  useEffect(() => {
+    if (activeLyricRef.current) activeLyricRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [activeLyric])
+
   if (!current || !player.nowPlayingOpen) return null
 
   const toggleLike = () => {
@@ -85,30 +91,30 @@ export default function NowPlaying() {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col">
+    <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col overflow-hidden">
       <header className="h-16 shrink-0 flex items-center justify-between px-5 md:px-8 border-b border-white/10">
-        <button onClick={player.closeNowPlaying} className="p-2 rounded-full hover:bg-white/10" aria-label="Close Now Playing">
+        <button onClick={player.closeNowPlaying} className="control-button control-button-sm" aria-label="Close Now Playing">
           <ChevronDown size={26} />
         </button>
         <div className="text-center">
           <p className="text-[11px] uppercase tracking-[0.2em] text-text-subdued">Now Playing</p>
           <p className="text-xs text-text-muted truncate max-w-[240px]">{current.artist}</p>
         </div>
-        <button onClick={share} className="p-2 rounded-full hover:bg-white/10" aria-label="Share song"><Share2 size={20} /></button>
+        <button onClick={share} className="control-button control-button-sm" aria-label="Share song"><Share2 size={20} /></button>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-6 md:px-10">
+      <div className="now-playing-scroll flex-1 min-h-0 overflow-y-auto px-4 py-4 md:px-10 md:py-6">
         <div className="max-w-6xl mx-auto grid lg:grid-cols-[minmax(320px,520px)_1fr] gap-8 xl:gap-14 items-center min-h-full">
           <section className="flex flex-col items-center lg:items-start">
-            <div className="relative w-full max-w-[460px] aspect-square rounded-2xl overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,.65)]">
-              {current.thumbnail ? <img src={current.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-surface-elevated flex items-center justify-center"><Music2 size={80} /></div>}
+            <div className="now-playing-artwork relative w-full max-w-[460px] aspect-square rounded-2xl overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,.65)] bg-surface-elevated">
+              {getArtwork(current, 'large') ? <img src={getArtwork(current, 'large')} srcSet={artworkSrcSet(current)} sizes="(max-width: 767px) 88vw, 460px" alt="" className="w-full h-full object-cover" fetchPriority="high" decoding="async" /> : <div className="w-full h-full bg-surface-elevated flex items-center justify-center"><Music2 size={80} /></div>}
             </div>
             <div className="w-full max-w-[460px] mt-6 flex items-start gap-4">
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl md:text-3xl font-bold truncate">{current.title}</h1>
                 <p className="text-text-muted text-lg truncate mt-1">{current.artist}</p>
               </div>
-              <button onClick={toggleLike} className="p-2 mt-1" aria-label={isLiked ? 'Unlike' : 'Like'}>
+              <button onClick={toggleLike} className="control-button control-button-sm mt-1" aria-label={isLiked ? 'Unlike' : 'Like'}>
                 <Heart size={26} className={isLiked ? 'fill-brand text-brand' : 'text-text-muted'} />
               </button>
             </div>
@@ -119,13 +125,13 @@ export default function NowPlaying() {
             </div>
 
             <div className="w-full max-w-[460px] flex items-center justify-center gap-7 md:gap-9 mt-5">
-              <button onClick={player.toggleShuffle} className={player.shuffle ? 'text-brand' : 'text-text-muted'} aria-label="Shuffle"><Shuffle size={20}/></button>
+              <button onClick={player.toggleShuffle} className={`control-button control-button-sm ${player.shuffle ? 'is-active' : ''}`} aria-label="Shuffle"><Shuffle size={20}/></button>
               <button onClick={player.playPrevious} aria-label="Previous"><SkipBack size={28}/></button>
-              <button onClick={player.togglePlay} aria-label={player.isPlaying ? 'Pause' : 'Play'} className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform">
+              <button onClick={player.togglePlay} aria-label={player.isPlaying ? 'Pause' : 'Play'} className="control-button control-button-play">
                 {player.isPlaying ? <Pause size={27}/> : <Play size={27} className="ml-1"/>}
               </button>
               <button onClick={player.playNext} aria-label="Next"><SkipForward size={28}/></button>
-              <button onClick={player.cycleRepeat} className={player.repeatMode !== 'off' ? 'text-brand' : 'text-text-muted'} aria-label="Repeat">
+              <button onClick={player.cycleRepeat} className={`control-button control-button-sm ${player.repeatMode !== 'off' ? 'is-active' : ''}`} aria-label="Repeat">
                 {player.repeatMode === 'one' ? <Repeat1 size={20}/> : <Repeat size={20}/>} 
               </button>
             </div>
@@ -137,10 +143,10 @@ export default function NowPlaying() {
             </div>
 
             <div className="flex items-center gap-2 mt-5 flex-wrap justify-center">
-              <button onClick={() => setTab('queue')} className="np-pill"><ListMusic size={15}/> Queue</button>
-              <button onClick={() => setSleepOpen(v => !v)} className={`np-pill ${player.sleepTimerSeconds ? 'text-brand' : ''}`}><Moon size={15}/> Sleep</button>
-              <button onClick={() => setTab('lyrics')} className="np-pill"><Music2 size={15}/> Lyrics</button>
-              <button onClick={share} className="np-pill"><Share2 size={15}/> Share</button>
+              <button onClick={() => setTab('queue')} className="sf-chip"><ListMusic size={15}/> Queue</button>
+              <button onClick={() => setSleepOpen(v => !v)} className={`sf-chip ${player.sleepTimerSeconds ? 'text-brand' : ''}`}><Moon size={15}/> Sleep</button>
+              <button onClick={() => setTab('lyrics')} className="sf-chip"><Music2 size={15}/> Lyrics</button>
+              <button onClick={share} className="sf-chip"><Share2 size={15}/> Share</button>
             </div>
             {sleepOpen && <div className="mt-3 bg-surface-elevated border border-border rounded-xl p-2 w-full max-w-[320px]">
               <p className="text-xs font-semibold text-text-muted px-3 py-2">Sleep timer</p>
@@ -150,7 +156,7 @@ export default function NowPlaying() {
             </div>}
           </section>
 
-          <section className="min-h-[420px] bg-white/[0.035] border border-white/10 rounded-2xl overflow-hidden flex flex-col">
+          <section className="now-playing-side min-h-[420px] bg-white/[0.035] border border-white/10 rounded-2xl overflow-hidden flex flex-col">
             <div className="flex items-center border-b border-white/10 p-2 gap-1">
               {['lyrics','queue','about'].map(name => <button key={name} onClick={() => setTab(name)} className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize ${tab === name ? 'bg-white/10 text-white' : 'text-text-muted hover:text-white'}`}>{name}</button>)}
             </div>
@@ -185,7 +191,7 @@ export default function NowPlaying() {
                 {lyricsState.status === 'available' && lyricsState.data.synced && (
                   <div className="space-y-3 text-lg md:text-2xl font-bold leading-tight">
                     {syncedLines.map((line, i) => (
-                      <button key={`${line.time}-${i}`} onClick={() => player.seekTo(line.time)} className={`block w-full text-left transition-all ${i === activeLyric ? 'text-white scale-[1.01]' : 'text-text-subdued hover:text-text'}`}>{line.text}</button>
+                      <button ref={i === activeLyric ? activeLyricRef : null} key={`${line.time}-${i}`} onClick={() => player.seekTo(line.time)} className={`block w-full text-left transition-all ${i === activeLyric ? 'text-white scale-[1.01]' : 'text-text-subdued hover:text-text'}`}>{line.text}</button>
                     ))}
                   </div>
                 )}

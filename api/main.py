@@ -22,10 +22,10 @@ from services import ytmusic
 
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger("spotifusion.api")
-RATE_LIMIT_PER_MINUTE=int(os.getenv("RATE_LIMIT_PER_MINUTE","600"))
+RATE_LIMIT_PER_MINUTE=int(os.getenv("RATE_LIMIT_PER_MINUTE","100000"))
 SEARCH_RATE_LIMIT=os.getenv("SEARCH_RATE_LIMIT",f"{RATE_LIMIT_PER_MINUTE}/minute")
 SONG_RATE_LIMIT=os.getenv("SONG_RATE_LIMIT",f"{max(RATE_LIMIT_PER_MINUTE,1200)}/minute")
-LYRICS_RATE_LIMIT=os.getenv("LYRICS_RATE_LIMIT","300/minute")
+LYRICS_RATE_LIMIT=os.getenv("LYRICS_RATE_LIMIT","100000/minute")
 UPSTREAM_CONCURRENCY=int(os.getenv("UPSTREAM_CONCURRENCY","16"))
 ALLOWED_ORIGINS=[o.strip() for o in os.getenv("ALLOWED_ORIGINS","http://localhost:5173,http://127.0.0.1:5173,https://spotifusion.vercel.app").split(",") if o.strip()]
 
@@ -117,7 +117,7 @@ def search(request:Request,q:str=Query(...,min_length=2,max_length=120),_user=De
     if len(query)<2: raise HTTPException(400,"Search query is too short.")
     key=cache.normalize_key("search:v2",query)
     try:
-        tracks,cached=_cached_upstream(key,lambda:ytmusic.search_songs(query,limit=20),ttl=int(os.getenv("SEARCH_CACHE_TTL",str(6*3600))))
+        tracks,cached=_cached_upstream(key,lambda:ytmusic.search_songs(query,limit=int(os.getenv("SEARCH_RESULT_LIMIT", "100"))),ttl=int(os.getenv("SEARCH_CACHE_TTL",str(6*3600))))
     except Exception as exc:
         logger.error("Search failed for query=%r: %s",query,exc)
         raise HTTPException(502,"Unable to search right now. Please try again.") from exc
@@ -147,6 +147,32 @@ def lyrics(request:Request,video_id:str,_user=Depends(require_firebase_user)):
         logger.error("Lyrics lookup failed for id=%r: %s",video_id,exc)
         raise HTTPException(502,"Unable to fetch lyrics right now. Please try again.") from exc
     return result
+
+@app.get("/api/discover")
+@limiter.limit(os.getenv("DISCOVER_RATE_LIMIT", "120/minute"))
+def discover(request: Request, _user=Depends(require_firebase_user)):
+    key = "discover:v1:IN"
+    try:
+        tracks, cached = _cached_upstream(
+            key,
+            lambda: ytmusic.get_discover("IN"),
+            ttl=int(os.getenv("DISCOVER_CACHE_TTL", str(3 * 3600))),
+        )
+    except Exception as exc:
+        logger.error("Discovery failed: %s", exc)
+        raise HTTPException(502, "Discovery is temporarily unavailable.") from exc
+
+    trending = tracks.get("trending", []) if isinstance(tracks, dict) else []
+    fresh = tracks.get("fresh", []) if isinstance(tracks, dict) else []
+    sections = []
+    if trending:
+        sections.append({"id": "india-trending", "label": "Trending", "title": "Trending in India", "subtitle": "Popular right now", "tracks": trending})
+        sections.append({"id": "top-picks", "label": "Popular", "title": "Top picks", "subtitle": "Popular music to explore", "tracks": trending[:12]})
+    if fresh:
+        sections.append({"id": "new-releases", "label": "Fresh music", "title": "New and recently surfaced", "subtitle": "Fresh tracks from YouTube Music", "tracks": fresh})
+    if trending:
+        sections.append({"id": "discover", "label": "Discover", "title": "Discover something new", "subtitle": "A mix of popular music and fresh picks", "tracks": (fresh[:12] + trending[6:18])[:24]})
+    return {"sections": sections, "cached": cached}
 
 @app.exception_handler(Exception)
 def unhandled_exception_handler(request:Request,exc:Exception):
