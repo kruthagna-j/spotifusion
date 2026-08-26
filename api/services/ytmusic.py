@@ -136,7 +136,7 @@ def _to_search_entity(item: dict) -> Optional[dict]:
     return None
 
 
-def search_songs(query: str, limit: int = 100) -> list[dict]:
+def search_songs(query: str, limit: int = 100000) -> list[dict]:
     """Search YouTube Music using the mixed search index.
 
     Unlike the old implementation, this deliberately does NOT use
