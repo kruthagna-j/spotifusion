@@ -48,19 +48,9 @@ export function getArtwork(track, size = 'large') {
   return value
 }
 
-export function artworkSrcSet(track) {
-  const candidates = [
-    [getArtwork(track, 'small'), 320],
-    [getArtwork(track, 'medium'), 800],
-    [getArtwork(track, 'large'), 1600],
-  ]
-
-  const unique = new Set()
-  const values = []
-  for (const [url, width] of candidates) {
-    if (!validUrl(url) || unique.has(url)) continue
-    unique.add(url)
-    values.push(`${url} ${width}w`)
-  }
-  return values.length > 1 ? values.join(', ') : undefined
+export function artworkSrcSet() {
+  // Disabled intentionally. Some YouTube/Google thumbnail URLs contain
+  // provider-specific descriptors that browsers reject in srcset.
+  // Spotifusion now uses one validated high-resolution URL instead.
+  return undefined
 }

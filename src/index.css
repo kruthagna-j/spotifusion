@@ -219,54 +219,39 @@ body { overscroll-behavior: none; }
 @media (max-width: 768px) { .search-entity-grid { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 4px; scroll-snap-type: x proximity; scrollbar-width: none; } .search-entity-grid::-webkit-scrollbar { display: none; } .sf-entity-card { flex: 0 0 150px; scroll-snap-align: start; } }
 @media (max-width: 480px) { .sf-entity-card { flex-basis: 132px; } }
 
-/* Search category selector and infinite-results affordance */
-.search-category-tabs {
-  display: flex;
-  gap: 8px;
-  width: min(100%, 920px);
-  margin-bottom: 22px;
-  overflow-x: auto;
-  padding: 2px 2px 6px;
-  scrollbar-width: none;
-  overscroll-behavior-inline: contain;
+/* Settings v3: compact, touch-friendly, no emoji-based controls. */
+.sf-settings-section { border: 1px solid rgba(255,255,255,.07); background: var(--color-surface-elevated); border-radius: 16px; overflow: hidden; }
+.sf-settings-heading { width:100%; min-height:68px; display:flex; align-items:center; gap:12px; padding:14px 16px; color:var(--color-text); background:transparent; text-align:left; }
+.sf-settings-heading:hover { background:rgba(255,255,255,.035); }
+.sf-settings-heading strong { display:block; font-size:.92rem; }
+.sf-settings-heading small { display:block; margin-top:3px; color:var(--color-text-subdued); font-size:.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-settings-heading-icon { width:36px; height:36px; border-radius:11px; display:grid; place-items:center; background:rgba(30,215,96,.09); color:var(--color-brand); flex:none; }
+.sf-settings-content { border-top:1px solid rgba(255,255,255,.06); padding:4px 16px 14px; }
+.sf-setting-row { min-height:68px; display:flex; align-items:center; gap:14px; padding:13px 0; border-bottom:1px solid rgba(255,255,255,.055); }
+.sf-setting-row:last-child { border-bottom:0; }
+.sf-setting-row-icon { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; background:rgba(255,255,255,.045); color:var(--color-text-muted); flex:none; }
+.sf-setting-toggle { width:46px; height:27px; border-radius:999px; padding:3px; background:#3a3a3a; flex:none; transition:background .16s ease; }
+.sf-setting-toggle span { display:block; width:21px; height:21px; border-radius:50%; background:#fff; transform:translateX(0); transition:transform .16s ease; }
+.sf-setting-toggle.is-on { background:var(--color-brand); }
+.sf-setting-toggle.is-on span { transform:translateX(19px); }
+.sf-setting-choice { min-height:34px; padding:0 11px; border-radius:9px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.035); color:var(--color-text-muted); font-size:.72rem; font-weight:800; }
+.sf-setting-choice:hover { background:rgba(255,255,255,.08); color:var(--color-text); }
+.sf-setting-choice.is-active { border-color:rgba(30,215,96,.45); background:rgba(30,215,96,.12); color:var(--color-brand); }
+.sf-account-card,.sf-storage-card { display:flex; align-items:center; gap:12px; padding:14px; margin:8px 0 4px; border-radius:13px; background:rgba(255,255,255,.035); }
+.sf-account-card img,.sf-account-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:rgba(255,255,255,.08); display:grid; place-items:center; color:var(--color-text-muted); flex:none; }
+.sf-outline-button,.sf-danger-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; padding:0 12px; border-radius:9px; border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.035); color:var(--color-text-muted); font-size:.72rem; font-weight:800; white-space:nowrap; }
+.sf-outline-button:hover { background:rgba(255,255,255,.08); color:var(--color-text); }
+.sf-danger-button { color:#f28b8b; border-color:rgba(239,68,68,.18); }
+.sf-danger-button:hover { background:rgba(239,68,68,.08); color:#ffadad; }
+.sf-info-box { display:flex; align-items:flex-start; gap:9px; padding:11px 12px; border-radius:10px; background:rgba(255,255,255,.035); color:var(--color-text-subdued); font-size:.72rem; line-height:1.55; }
+@media (max-width:767px) {
+  .sf-settings-content { padding-left:12px; padding-right:12px; }
+  .sf-settings-heading { min-height:62px; padding:12px; }
+  .sf-setting-row { align-items:flex-start; }
+  .sf-setting-row > :last-child { margin-left:auto; }
+  .sf-account-card,.sf-storage-card { align-items:flex-start; flex-wrap:wrap; }
+  .sf-account-card .sf-outline-button { margin-left:auto; }
 }
-.search-category-tabs::-webkit-scrollbar { display: none; }
-.search-category-tab {
-  flex: 0 0 auto;
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 16px;
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 999px;
-  background: rgba(255,255,255,.045);
-  color: var(--text-muted, #a7a7a7);
-  font-size: 13px;
-  font-weight: 700;
-  transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
-}
-.search-category-tab:hover { background: rgba(255,255,255,.09); color: var(--text, #fff); transform: translateY(-1px); }
-.search-category-tab.is-active {
-  background: var(--brand, #1ed760);
-  border-color: var(--brand, #1ed760);
-  color: #071008;
-}
-.search-category-tab:focus-visible { outline: 2px solid var(--brand, #1ed760); outline-offset: 2px; }
-.search-load-more {
-  min-height: 72px;
-  margin: 24px 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--text-subdued, #777);
-  font-size: 12px;
-  font-weight: 700;
-}
-@media (max-width: 640px) {
-  .search-category-tabs { width: calc(100vw - 32px); max-width: none; }
-  .search-category-tab { min-height: 40px; padding: 0 13px; font-size: 12px; }
-  .search-load-more { min-height: 64px; }
-}
+html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, html[data-reduced-motion="true"] *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
+html[data-compact="true"] .sf-settings-section { border-radius:12px; }
+html[data-compact="true"] .sf-setting-row { min-height:56px; padding:9px 0; }

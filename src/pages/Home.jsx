@@ -11,7 +11,7 @@ import { getArtwork, artworkSrcSet } from '@/lib/artwork'
 function TrackCard({ track, tracks, player }) {
   return <button onClick={() => player.playTrack(track, tracks)} className="group text-left min-w-0 w-full">
     <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-surface-highlight mb-3">
-      {getArtwork(track, 'medium') ? <img src={getArtwork(track, 'medium')} srcSet={artworkSrcSet(track) || undefined} sizes="(max-width: 640px) 42vw, (max-width: 1024px) 25vw, 180px" alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <div className="w-full h-full grid place-items-center"><Music2 size={32}/></div>}
+      {getArtwork(track, 'medium') ? <img src={getArtwork(track, 'medium')} srcSet={artworkSrcSet(track)} sizes="(max-width: 640px) 42vw, (max-width: 1024px) 25vw, 180px" alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <div className="w-full h-full grid place-items-center"><Music2 size={32}/></div>}
       <span className="absolute right-2 bottom-2 w-10 h-10 rounded-full bg-brand text-black grid place-items-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-all shadow-lg"><Play size={17} fill="currentColor" /></span>
     </div>
     <p className="font-bold text-sm truncate">{track.title}</p>

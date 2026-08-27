@@ -107,7 +107,7 @@ export default function NowPlaying() {
         <div className="max-w-6xl mx-auto grid lg:grid-cols-[minmax(320px,520px)_1fr] gap-8 xl:gap-14 items-center min-h-full">
           <section className="flex flex-col items-center lg:items-start">
             <div className="now-playing-artwork relative w-full max-w-[460px] aspect-square rounded-2xl overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,.65)] bg-surface-elevated">
-              {getArtwork(current, 'large') ? <img src={getArtwork(current, 'large')} srcSet={artworkSrcSet(current) || undefined} sizes="(max-width: 767px) 88vw, 460px" alt="" className="w-full h-full object-cover" fetchPriority="high" decoding="async" /> : <div className="w-full h-full bg-surface-elevated flex items-center justify-center"><Music2 size={80} /></div>}
+              {getArtwork(current, 'large') ? <img src={getArtwork(current, 'large')} srcSet={artworkSrcSet(current)} sizes="(max-width: 767px) 88vw, 460px" alt="" className="w-full h-full object-cover" fetchPriority="high" decoding="async" /> : <div className="w-full h-full bg-surface-elevated flex items-center justify-center"><Music2 size={80} /></div>}
             </div>
             <div className="w-full max-w-[460px] mt-6 flex items-start gap-4">
               <div className="min-w-0 flex-1">

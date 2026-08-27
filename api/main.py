@@ -130,10 +130,14 @@ def search(
     if len(query) < 2:
         raise HTTPException(400, "Search query is too short.")
 
-    page_size = max(20, min(int(os.getenv("SEARCH_PAGE_SIZE", "100")), 100))
+    page_size = max(20, min(int(os.getenv("SEARCH_PAGE_SIZE", "25")), 100))
     category = category.lower()
-    requested = min(batch * page_size, int(os.getenv("SEARCH_PROVIDER_MAX", "10000")))
-    key = cache.normalize_key(f"search:v4:{category}:{requested}", query)
+    # ytmusicapi exposes continuation pagination through its `limit` argument.
+    # Request enough items to cover the requested batch, then slice only the
+    # current batch. The complete provider response is cached, so repeated
+    # users for the same query/category do not fan out to YouTube Music.
+    requested = min(batch * page_size, int(os.getenv("SEARCH_PROVIDER_MAX", "5000")))
+    key = cache.normalize_key(f"search:v6:{category}:{requested}", query)
     try:
         all_results, cached = _cached_upstream(
             key,
@@ -145,15 +149,11 @@ def search(
         raise HTTPException(502, "Unable to search right now. Please try again.") from exc
 
     all_results = all_results if isinstance(all_results, list) else []
-    start_index = (batch - 1) * page_size
-    results = all_results[start_index:start_index + page_size]
-    has_more = len(all_results) > start_index + len(results)
-    # If the provider returned a full batch, a continuation may exist even if
-    # the current implementation cannot expose it until the next request.
-    # The next request is therefore allowed; duplicate results are filtered by
-    # the frontend and has_more becomes false when no new items arrive.
-    if len(results) == page_size and batch < 100000:
-        has_more = True
+    start = (batch - 1) * page_size
+    results = all_results[start:start + page_size]
+    # If the provider returned a full requested window, another continuation
+    # may exist. The client also stops when a later page has no fresh IDs.
+    has_more = len(all_results) > start + len(results) or len(all_results) >= requested
 
     return {
         "query": query,
