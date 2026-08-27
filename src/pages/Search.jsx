@@ -10,7 +10,7 @@ import { getArtwork, artworkSrcSet } from '@/lib/artwork'
 
 const HISTORY_KEY = 'spotifusion:search-history:v2'
 const MAX_HISTORY = 100
-const VISIBLE_HISTORY = 100
+const VISIBLE_HISTORY = 10
 const TRENDING_SUGGESTIONS = ['Saiyaara', 'Arijit Singh', 'Anirudh Ravichander', 'A.R. Rahman', 'The Weeknd', 'Taylor Swift']
 
 function normalizeQuery(value) { return value.trim().replace(/\s+/g, ' ') }

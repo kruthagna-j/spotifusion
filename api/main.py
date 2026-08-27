@@ -112,16 +112,16 @@ def health(): return {"status":"ok","cache":"enabled" if cache._get_client() els
 
 @app.get("/api/search")
 @limiter.limit(SEARCH_RATE_LIMIT)
-def search(request:Request,q:str=Query(...,min_length=2,max_length=120),_user=Depends(require_firebase_user)):
+def search(request:Request,q:str=Query(...,min_length=2,max_length=120),limit:int=Query(1000,ge=20,le=5000),_user=Depends(require_firebase_user)):
     query=" ".join(q.strip().split())
     if len(query)<2: raise HTTPException(400,"Search query is too short.")
-    key=cache.normalize_key("search:v2",query)
+    key=cache.normalize_key("search:v3",f"{query}|{limit}")
     try:
-        tracks,cached=_cached_upstream(key,lambda:ytmusic.search_songs(query,limit=int(os.getenv("SEARCH_RESULT_LIMIT", "100"))),ttl=int(os.getenv("SEARCH_CACHE_TTL",str(6*3600))))
+        tracks,cached=_cached_upstream(key,lambda:ytmusic.search_songs(query,limit=limit),ttl=int(os.getenv("SEARCH_CACHE_TTL",str(6*3600))))
     except Exception as exc:
         logger.error("Search failed for query=%r: %s",query,exc)
         raise HTTPException(502,"Unable to search right now. Please try again.") from exc
-    return {"query":query,"results":tracks,"cached":cached}
+    return {"query":query,"results":tracks,"cached":cached,"count":len(tracks)}
 
 @app.get("/api/song/{video_id}")
 @limiter.limit(SONG_RATE_LIMIT)

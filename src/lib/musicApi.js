@@ -65,7 +65,7 @@ export async function searchMusic(query, { signal } = {}) {
   const key = normalizedKey(q)
   const cached = getCached(searchCache, key, SEARCH_CACHE_TTL)
   if (cached) return cached
-  const body = await coalesce(`search:${key}`, () => request(`/api/search?q=${encodeURIComponent(q)}`, { signal }))
+  const body = await coalesce(`search:${key}:all`, () => request(`/api/search?q=${encodeURIComponent(q)}&limit=1000`, { signal }))
   if (!body || !Array.isArray(body.results)) throw new Error('Unable to search right now. Please try again.')
   setCached(searchCache, key, body.results, MAX_SEARCH_CACHE)
   return body.results
