@@ -167,6 +167,40 @@ def search(
     }
 
 
+@app.get("/api/artist/{artist_id}")
+@limiter.limit(SONG_RATE_LIMIT)
+def artist(request: Request, artist_id: str, _user=Depends(require_firebase_user)):
+    if not artist_id or len(artist_id) > 128:
+        raise HTTPException(400, "Invalid artist id.")
+    key = cache.normalize_key("artist:v1", artist_id)
+    try:
+        payload, _ = _cached_upstream(
+            key,
+            lambda: ytmusic.get_artist(artist_id),
+            ttl=int(os.getenv("ENTITY_CACHE_TTL", str(6 * 3600))),
+        )
+    except Exception as exc:
+        logger.error("Artist lookup failed for id=%r: %s", artist_id, exc)
+        raise HTTPException(502, "Unable to fetch this artist right now. Please try again.") from exc
+    return payload
+
+@app.get("/api/album/{album_id}")
+@limiter.limit(SONG_RATE_LIMIT)
+def album(request: Request, album_id: str, _user=Depends(require_firebase_user)):
+    if not album_id or len(album_id) > 128:
+        raise HTTPException(400, "Invalid album id.")
+    key = cache.normalize_key("album:v1", album_id)
+    try:
+        payload, _ = _cached_upstream(
+            key,
+            lambda: ytmusic.get_album(album_id),
+            ttl=int(os.getenv("ENTITY_CACHE_TTL", str(6 * 3600))),
+        )
+    except Exception as exc:
+        logger.error("Album lookup failed for id=%r: %s", album_id, exc)
+        raise HTTPException(502, "Unable to fetch this album right now. Please try again.") from exc
+    return payload
+
 @app.get("/api/song/{video_id}")
 @limiter.limit(SONG_RATE_LIMIT)
 def song(request:Request,video_id:str,_user=Depends(require_firebase_user)):

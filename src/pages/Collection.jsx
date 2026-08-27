@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Play, Music2, Search as SearchIcon, Shuffle, Disc3, UserRound } from 'lucide-react'
-import { searchMusic } from '@/lib/musicApi'
+import { getArtist, getAlbum } from '@/lib/musicApi'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
 import TrackRow from '@/components/TrackRow'
@@ -18,18 +18,18 @@ export default function Collection({ type }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!user || initial.length) { setLoading(false); return }
+    if (!user) { setLoading(false); return }
+    if (initial.length) { setLoading(false); return }
     let cancelled = false
     setLoading(true)
-    searchMusic(title).then(results => {
+    const browseId = location.state?.browseId || value
+    const loader = type === 'artist' ? getArtist(browseId) : getAlbum(browseId)
+    loader.then(payload => {
       if (cancelled) return
-      const filtered = type === 'artist'
-        ? results.filter(t => (t.artist || '').toLowerCase().includes(title.toLowerCase()))
-        : results.filter(t => (t.album || '').toLowerCase().includes(title.toLowerCase()))
-      setTracks(filtered.length ? filtered : results)
+      setTracks(Array.isArray(payload?.tracks) ? payload.tracks : [])
     }).catch(e => !cancelled && setError(e.message)).finally(() => !cancelled && setLoading(false))
     return () => { cancelled = true }
-  }, [user, title, type])
+  }, [user, value, type])
 
   if (!user) return <div className="p-8 text-center"><h1 className="text-2xl font-black">Sign in to explore {type}s</h1><Link to="/search" className="inline-flex mt-5 bg-brand text-black px-5 py-2.5 rounded-full font-bold">Go to Search</Link></div>
   return <div className="p-4 md:p-7 max-w-6xl mx-auto">

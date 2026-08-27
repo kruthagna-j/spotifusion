@@ -20,7 +20,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import TrackRow from '@/components/TrackRow'
 import { SkeletonRowList } from '@/components/Skeleton'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { getArtwork } from '@/lib/artwork'
 
 const HISTORY_KEY = 'spotifusion:search-history:v2'
@@ -85,9 +85,11 @@ function EntityCard({ item }) {
   const type = item.resultType
   const Icon = type === 'artist' ? UserRound : type === 'album' ? Disc3 : type === 'jukebox' ? Radio : ListMusic
   const label = type === 'artist' ? 'Artist' : type === 'album' ? 'Album' : type === 'jukebox' ? 'Jukebox' : 'Playlist'
-  const image = getArtwork(item, 'medium')
+  const image = getArtwork(item, 'large')
+  const navigate = useNavigate()
+  const destination = type === 'artist' ? `/artist/${encodeURIComponent(item.browseId || item.id)}` : type === 'album' ? `/album/${encodeURIComponent(item.browseId || item.id)}` : null
   return (
-    <button type="button" className="sf-entity-card group text-left min-w-0">
+    <button type="button" onClick={() => destination && navigate(destination, { state: { name: item.title, artwork: image, browseId: item.browseId || item.id } })} className={`sf-entity-card group text-left min-w-0 ${destination ? 'cursor-pointer' : 'cursor-default'}`}>
       <div className="relative aspect-square overflow-hidden rounded-2xl bg-surface-highlight mb-3">
         {image ? (
           <img

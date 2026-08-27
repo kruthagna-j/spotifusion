@@ -71,6 +71,27 @@ export async function searchMusic(query, { signal } = {}) {
   return body.results
 }
 
+
+export async function getArtist(artistId) {
+  if (!artistId || !auth.currentUser) return null
+  const key = `artist:${artistId}`
+  const cached = getCached(songCache, key, ENTITY_CACHE_TTL)
+  if (cached) return cached
+  const body = await coalesce(key, () => request(`/api/artist/${encodeURIComponent(artistId)}`))
+  if (body) setCached(songCache, key, body, MAX_ENTITY_CACHE)
+  return body
+}
+
+export async function getAlbum(albumId) {
+  if (!albumId || !auth.currentUser) return null
+  const key = `album:${albumId}`
+  const cached = getCached(songCache, key, ENTITY_CACHE_TTL)
+  if (cached) return cached
+  const body = await coalesce(key, () => request(`/api/album/${encodeURIComponent(albumId)}`))
+  if (body) setCached(songCache, key, body, MAX_ENTITY_CACHE)
+  return body
+}
+
 export async function getSong(videoId) {
   if (!videoId || !auth.currentUser) return null
   const cached = getCached(songCache, videoId, ENTITY_CACHE_TTL)

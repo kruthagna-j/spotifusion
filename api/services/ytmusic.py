@@ -183,6 +183,51 @@ def search_songs(query: str, limit: int = 100, category: str = "all") -> list[di
     return entities
 
 
+def get_artist(artist_id: str) -> dict:
+    """Return an artist header plus tracks the artist performs/writes when
+    YouTube Music exposes them. get_artist is far more accurate than searching
+    the artist name and filtering arbitrary search results."""
+    data = _client().get_artist(artist_id)
+    tracks = []
+    for key in ("songs", "albums", "singles", "videos"):
+        for item in data.get(key) or []:
+            try:
+                track = _to_track(item)
+                if track and track.get("id") not in {t.get("id") for t in tracks}:
+                    tracks.append(track)
+            except Exception:
+                continue
+    return {
+        "id": artist_id,
+        "type": "artist",
+        "name": data.get("name") or "Artist",
+        "description": data.get("description") or "",
+        "thumbnail": _best_thumbnail(data.get("thumbnails")),
+        "artwork": _artwork(data.get("thumbnails")),
+        "tracks": tracks,
+    }
+
+
+def get_album(album_id: str) -> dict:
+    data = _client().get_album(album_id)
+    tracks = []
+    for item in data.get("tracks") or []:
+        try:
+            track = _to_track(item)
+            if track:
+                tracks.append(track)
+        except Exception:
+            continue
+    return {
+        "id": album_id,
+        "type": "album",
+        "name": data.get("title") or "Album",
+        "description": data.get("description") or "",
+        "thumbnail": _best_thumbnail(data.get("thumbnails")),
+        "artwork": _artwork(data.get("thumbnails")),
+        "tracks": tracks,
+    }
+
 def get_song(video_id: str) -> Optional[dict]:
     """Look up a single track's metadata by video id."""
     data: dict[str, Any] = _client().get_song(video_id)
