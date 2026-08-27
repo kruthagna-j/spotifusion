@@ -312,3 +312,150 @@ body { overscroll-behavior: none; }
 html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, html[data-reduced-motion="true"] *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
 html[data-compact="true"] .sf-settings-section { border-radius:12px; }
 html[data-compact="true"] .sf-setting-row { min-height:56px; padding:9px 0; }
+
+/* -------------------------------------------------------------------------
+   Mobile release layout hardening
+   The mobile UI is intentionally treated as an app viewport, not a squeezed
+   desktop page. These rules prevent header/account controls, cards and long
+   labels from forcing horizontal overflow on narrow Android screens.
+   ------------------------------------------------------------------------- */
+html, body, #root {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+main,
+main > *,
+main section,
+main article,
+main form,
+main header,
+main footer {
+  min-width: 0;
+  max-width: 100%;
+}
+
+main img,
+main video,
+main canvas,
+main svg {
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  /* Give every page a little breathing room without allowing a child to
+     enlarge the viewport. */
+  main > * {
+    width: 100%;
+  }
+
+  /* Compact, stable mobile top bar. The sign-in button is deliberately
+     shortened to avoid pushing the account controls off-screen. */
+  header.sticky {
+    min-height: 58px;
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 8px;
+  }
+
+  header.sticky > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+
+  header.sticky > div:first-child > button {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 116px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  header.sticky > div:last-child {
+    flex: 0 0 auto;
+  }
+
+  /* Page containers: preserve readable side gutters on phones. */
+  main > div[class*="p-4"],
+  main > div[class*="p-6"] {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  /* Settings/account controls should stack instead of escaping the card. */
+  .sf-account-card {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .sf-account-card .sf-outline-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .sf-setting-row {
+    min-width: 0;
+  }
+
+  .sf-setting-row > :last-child {
+    max-width: 55%;
+  }
+
+  .sf-setting-row .sf-setting-choice {
+    min-width: 42px;
+  }
+
+  /* Long settings descriptions and account text must never widen a row. */
+  .sf-settings-heading,
+  .sf-settings-content,
+  .sf-setting-row,
+  .sf-setting-row > div,
+  .sf-settings-heading > span {
+    min-width: 0;
+  }
+
+  .sf-settings-heading small,
+  .sf-setting-row p {
+    overflow-wrap: anywhere;
+  }
+
+  /* Touch targets. */
+  button,
+  a,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-bottom-nav-inner {
+    min-height: 60px;
+  }
+
+  .mobile-tab {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 380px) {
+  header.sticky {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  header.sticky > div:first-child > button {
+    max-width: 100px;
+  }
+
+  .mobile-bottom-nav {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .mobile-tab-icon {
+    width: 28px;
+  }
+}

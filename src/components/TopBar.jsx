@@ -43,12 +43,12 @@ export default function TopBar() {
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
         <NavLink
           to="/settings"
           aria-label="Settings"
           className={({ isActive }) =>
-            `flex w-9 h-9 rounded-full items-center justify-center transition-colors ${
+            `flex w-9 h-9 shrink-0 rounded-full items-center justify-center transition-colors ${
               isActive ? 'text-text bg-surface-elevated' : 'text-text-muted hover:text-text hover:bg-surface-elevated'
             }`
           }
@@ -63,7 +63,7 @@ export default function TopBar() {
                 onClick={() => setProfileOpen((v) => !v)}
                 aria-label="Open account menu"
                 aria-expanded={profileOpen}
-                className="flex items-center gap-2 bg-surface-elevated hover:bg-surface-hover rounded-full pl-1 pr-3 py-1 text-sm font-medium"
+                className="flex items-center gap-2 shrink-0 bg-surface-elevated hover:bg-surface-hover rounded-full pl-1 pr-2 sm:pr-3 py-1 text-sm font-medium"
               >
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="" className="w-7 h-7 rounded-full" />
@@ -77,9 +77,10 @@ export default function TopBar() {
           ) : (
             <button
               onClick={signIn}
-              className="bg-white text-black font-bold text-sm px-6 py-2 rounded-full hover:scale-105 transition-transform"
+              className="bg-white text-black font-bold text-xs sm:text-sm px-3 sm:px-6 py-2 rounded-full whitespace-nowrap hover:scale-105 transition-transform"
             >
-              Sign in with Google
+              <span className="sm:hidden">Sign in</span>
+              <span className="hidden sm:inline">Sign in with Google</span>
             </button>
           )}
         </div>
