@@ -164,6 +164,7 @@ function EntityResults({ items }) {
 
 export default function Search() {
   const { user, signIn } = useAuth()
+  const navigate = useNavigate()
   const location = useLocation()
   const online = useOnlineStatus()
   const params = new URLSearchParams(location.search)

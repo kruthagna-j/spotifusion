@@ -19,6 +19,7 @@ export default function Collection({ type }) {
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(!(state.tracks?.length))
   const [error, setError] = useState(null)
+  const [artworkFailed, setArtworkFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +53,7 @@ export default function Collection({ type }) {
       setTitle(payload.name || state.name || (type === 'artist' ? 'Artist' : 'Album'))
       setDescription(payload.description || '')
       setArtwork(getArtwork(payload, 'large') || state.artwork || null)
+      setArtworkFailed(false)
     }).catch((e) => {
       if (!cancelled) setError(e?.message || `Unable to load this ${type}.`)
     }).finally(() => {
@@ -64,14 +66,16 @@ export default function Collection({ type }) {
 
   if (!user) return <div className="p-6 md:p-8 text-center"><h1 className="text-2xl font-black">Sign in to explore {type}s</h1><Link to="/search" className="inline-flex mt-5 bg-brand text-black px-5 py-2.5 rounded-full font-bold">Go to Search</Link></div>
 
-  const heading = title || decodeURIComponent(value || '') || (type === 'artist' ? 'Artist' : 'Album')
+  const rawId = decodeURIComponent(value || '')
+  const looksLikeId = /^[A-Za-z0-9_-]{10,}$/.test(rawId)
+  const heading = title && !(looksLikeId && title === rawId) ? title : (type === 'artist' ? 'Artist' : 'Album')
   return <div className="p-4 md:p-7 max-w-6xl mx-auto overflow-x-hidden">
     <Link to="/search" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-white mb-5"><ArrowLeft size={16}/> Back to search</Link>
     <div className="sf-panel overflow-hidden mb-6">
       <div className="p-5 md:p-9 bg-gradient-to-br from-white/10 via-white/5 to-transparent">
         <div className="flex flex-col sm:flex-row sm:items-end gap-5">
           <div className="w-36 h-36 md:w-48 md:h-48 rounded-2xl overflow-hidden bg-surface-highlight shrink-0 shadow-card">
-            {artwork ? <img src={artwork} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display='none' }} /> : <div className="w-full h-full grid place-items-center"><Disc3 size={48} className="text-text-subdued" /></div>}
+            {artwork && !artworkFailed ? <img src={artwork} alt="" className="w-full h-full object-cover" onError={() => setArtworkFailed(true)} /> : <div className="w-full h-full grid place-items-center"><Disc3 size={48} className="text-text-subdued" /></div>}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[.2em] text-text-subdued font-bold">{type === 'artist' ? <UserRound size={14}/> : <Disc3 size={14}/>} {type}</div>
