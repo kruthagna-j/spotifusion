@@ -1,9 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import {
   getAuth,
-  initializeAuth,
-  browserLocalPersistence,
-  browserSessionPersistence,
   GoogleAuthProvider,
   signInWithPopup,
   signOut as fbSignOut,
@@ -27,20 +24,13 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-let auth
-try {
-  auth = initializeAuth(app, {
-    persistence: [browserLocalPersistence, browserSessionPersistence],
-  })
-} catch (err) {
-  // Hot reload / already-initialized Firebase fallback.
-  if (err?.code === 'auth/already-initialized') {
-    auth = getAuth(app)
-  } else {
-    throw err
-  }
-}
-export { auth }
+
+// Use Firebase's standard browser Auth initialization. The previous build
+// manually called initializeAuth() without a popupRedirectResolver. That is
+// unsafe for signInWithPopup()/reauthenticateWithPopup() and can surface
+// auth/argument-error in production browsers. getAuth() wires the supported
+// browser dependencies, including the popup/redirect resolver.
+export const auth = getAuth(app)
 export const db = getFirestore(app)
 
 const googleProvider = new GoogleAuthProvider()
