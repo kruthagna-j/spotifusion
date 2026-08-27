@@ -136,24 +136,50 @@ def _to_search_entity(item: dict) -> Optional[dict]:
     return None
 
 
-def search_songs(query: str, limit: int = 1000) -> list[dict]:
-    """Search YouTube Music using the mixed search index.
+def search_songs(query: str, limit: int = 100, category: str = "all") -> list[dict]:
+    """Search one category and normalize it for the frontend.
 
-    Unlike the old implementation, this deliberately does NOT use
-    filter="songs". One cached upstream search now returns a mixture of
-    songs, artists, albums, playlists and mixes/jukebox-style results.
+    ``ytmusicapi.search`` supports filtered searches and follows YouTube
+    Music continuations up to the requested limit. The frontend uses batches
+    so it never has to render a giant result set at once.
     """
-    results = _client().search(query, limit=limit)
-    entities = []
-    seen = set()
-    for item in results or []:
+    client = _client()
+    category = (category or "all").lower()
+    if category == "songs":
+        filters = ["songs"]
+    elif category == "albums":
+        filters = ["albums"]
+    elif category == "artists":
+        filters = ["artists"]
+    elif category == "playlists":
+        filters = ["playlists", "community_playlists", "featured_playlists"]
+    elif category in {"jukebox", "mixes", "mix"}:
+        # Jukebox/radio/mix shelves are exposed by the default mixed search.
+        filters = [None]
+    else:
+        filters = ["songs", "albums", "artists", "playlists"]
+
+    entities: list[dict] = []
+    seen: set[str] = set()
+    for filter_name in filters:
         try:
-            entity = _to_search_entity(item)
-            if entity and entity.get("id") and entity["id"] not in seen:
+            items = client.search(query, filter=filter_name, limit=max(20, int(limit)))
+        except Exception as exc:
+            logger.warning("Search failed for category=%s filter=%s: %s", category, filter_name, exc)
+            continue
+        for item in items or []:
+            try:
+                entity = _to_search_entity(item)
+                if not entity or not entity.get("id"):
+                    continue
+                if category == "jukebox" and entity.get("resultType") != "jukebox":
+                    continue
+                if entity["id"] in seen:
+                    continue
                 seen.add(entity["id"])
                 entities.append(entity)
-        except Exception as exc:
-            logger.warning("Skipping malformed search result: %s (%s)", item, exc)
+            except Exception as exc:
+                logger.warning("Skipping malformed search result: %s (%s)", item, exc)
     return entities
 
 

@@ -112,16 +112,60 @@ def health(): return {"status":"ok","cache":"enabled" if cache._get_client() els
 
 @app.get("/api/search")
 @limiter.limit(SEARCH_RATE_LIMIT)
-def search(request:Request,q:str=Query(...,min_length=2,max_length=120),limit:int=Query(1000,ge=20,le=5000),_user=Depends(require_firebase_user)):
-    query=" ".join(q.strip().split())
-    if len(query)<2: raise HTTPException(400,"Search query is too short.")
-    key=cache.normalize_key("search:v3",f"{query}|{limit}")
+def search(
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=120),
+    category: str = Query("all", pattern="^(all|songs|albums|artists|playlists|jukebox)$"),
+    batch: int = Query(1, ge=1, le=100000),
+    _user=Depends(require_firebase_user),
+):
+    """Category-aware batched search.
+
+    The UI asks for batch 1, then batch 2, etc. We intentionally do not put a
+    20/100 UI cap on the results. YouTube Music/ytmusicapi decides how many
+    continuations are actually available. The server deduplicates each batch
+    and tells the client whether new items remain.
+    """
+    query = " ".join(q.strip().split())
+    if len(query) < 2:
+        raise HTTPException(400, "Search query is too short.")
+
+    page_size = max(20, min(int(os.getenv("SEARCH_PAGE_SIZE", "100")), 100))
+    category = category.lower()
+    requested = min(batch * page_size, int(os.getenv("SEARCH_PROVIDER_MAX", "10000")))
+    key = cache.normalize_key(f"search:v4:{category}:{requested}", query)
     try:
-        tracks,cached=_cached_upstream(key,lambda:ytmusic.search_songs(query,limit=limit),ttl=int(os.getenv("SEARCH_CACHE_TTL",str(6*3600))))
+        all_results, cached = _cached_upstream(
+            key,
+            lambda: ytmusic.search_songs(query, limit=requested, category=category),
+            ttl=int(os.getenv("SEARCH_CACHE_TTL", str(6 * 3600))),
+        )
     except Exception as exc:
-        logger.error("Search failed for query=%r: %s",query,exc)
-        raise HTTPException(502,"Unable to search right now. Please try again.") from exc
-    return {"query":query,"results":tracks,"cached":cached,"count":len(tracks)}
+        logger.error("Search failed for query=%r category=%s batch=%s: %s", query, category, batch, exc)
+        raise HTTPException(502, "Unable to search right now. Please try again.") from exc
+
+    all_results = all_results if isinstance(all_results, list) else []
+    start_index = (batch - 1) * page_size
+    results = all_results[start_index:start_index + page_size]
+    has_more = len(all_results) > start_index + len(results)
+    # If the provider returned a full batch, a continuation may exist even if
+    # the current implementation cannot expose it until the next request.
+    # The next request is therefore allowed; duplicate results are filtered by
+    # the frontend and has_more becomes false when no new items arrive.
+    if len(results) == page_size and batch < 100000:
+        has_more = True
+
+    return {
+        "query": query,
+        "category": category,
+        "batch": batch,
+        "pageSize": page_size,
+        "results": results,
+        "hasMore": has_more,
+        "available": len(all_results),
+        "cached": cached,
+    }
+
 
 @app.get("/api/song/{video_id}")
 @limiter.limit(SONG_RATE_LIMIT)
