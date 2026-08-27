@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Chrome, Music2, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Globe, Music2, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Login() {
@@ -35,7 +35,7 @@ export default function Login() {
       <p className="text-sm text-text-muted mt-4 leading-6">Sign in to sync your library, save favorites, personalize your music and keep your player experience connected.</p>
 
       <button onClick={handleGoogle} disabled={busy} className="sf-login-google">
-        <Chrome size={19}/><span>{busy ? 'Connecting…' : 'Continue with Google'}</span><ArrowRight size={17} className="ml-auto"/>
+        <Globe size={19}/><span>{busy ? 'Connecting…' : 'Continue with Google'}</span><ArrowRight size={17} className="ml-auto"/>
       </button>
       {error && <div className="sf-login-error">{error}</div>}
       <div className="sf-login-safe"><ShieldCheck size={16}/><span>Authentication is handled securely by Firebase. Spotifusion never sees your Google password.</span></div>
