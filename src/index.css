@@ -223,18 +223,18 @@ body { overscroll-behavior: none; }
 .music-card-row::-webkit-scrollbar { display: none; }
 
 .mobile-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; padding: 0 .5rem env(safe-area-inset-bottom); pointer-events: none; }
-.mobile-bottom-nav-inner { pointer-events: auto; width: 100%; max-width: 680px; margin: 0 auto; min-height: 62px; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); align-items: center; padding: .35rem .25rem; border: 1px solid rgba(255,255,255,.08); border-bottom: 0; border-radius: 16px 16px 0 0; background: rgba(11,11,11,.96); backdrop-filter: blur(22px); box-shadow: 0 -12px 35px rgba(0,0,0,.28); }
+.mobile-bottom-nav-inner { pointer-events: auto; width: 100%; max-width: 680px; margin: 0 auto; min-height: 70px; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); align-items: center; padding: .35rem .25rem; border: 1px solid rgba(255,255,255,.08); border-bottom: 0; border-radius: 16px 16px 0 0; background: rgba(11,11,11,.96); backdrop-filter: blur(22px); box-shadow: 0 -12px 35px rgba(0,0,0,.28); }
 .mobile-tab { min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; color: var(--color-text-subdued); font-size: 10px; font-weight: 800; border-radius: 12px; }
 .mobile-tab:hover { color: var(--color-text); background: rgba(255,255,255,.05); }
 .mobile-tab.is-active { color: var(--color-brand); }
 .mobile-tab-icon { width: 34px; height: 28px; display: grid; place-items: center; border-radius: 10px; }
 .mobile-tab.is-active .mobile-tab-icon { background: rgba(30,215,96,.10); }
-.mobile-mini-player { position: fixed; left: .5rem; right: .5rem; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 900; }
+.mobile-mini-player { position: fixed; left: .5rem; right: .5rem; bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 900; }
 .mobile-mini-player-card { width: 100%; min-width: 0; display: flex; align-items: center; gap: .75rem; padding: .5rem .55rem; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(32,32,32,.97); backdrop-filter: blur(18px); box-shadow: 0 12px 35px rgba(0,0,0,.35); text-align: left; }
 
 @media (max-width: 767px) {
   .mobile-mini-player + * { max-width: 100vw; }
-  main { padding-bottom: calc(142px + env(safe-area-inset-bottom)) !important; }
+  main { padding-bottom: calc(170px + env(safe-area-inset-bottom)) !important; }
   .sf-panel { max-width: 100%; min-width: 0; }
   .control-button-play { width: 58px; height: 58px; }
   .control-button-desktop { width: 56px; height: 56px; }
@@ -245,7 +245,7 @@ body { overscroll-behavior: none; }
   .mobile-bottom-nav { padding-left: .25rem; padding-right: .25rem; }
   .mobile-tab { font-size: 9px; }
   .mobile-tab-icon { width: 30px; }
-  .mobile-mini-player { left: .35rem; right: .35rem; }
+  .mobile-mini-player { left: .35rem; right: .35rem; bottom: calc(70px + env(safe-area-inset-bottom)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -432,7 +432,7 @@ main svg {
   }
 
   .mobile-bottom-nav-inner {
-    min-height: 60px;
+    min-height: 70px;
   }
 
   .mobile-tab {
@@ -458,4 +458,16 @@ main svg {
   .mobile-tab-icon {
     width: 28px;
   }
+}
+
+
+/* Mobile release polish: content must finish above the two fixed docks, and
+   touch devices need visible actions rather than desktop hover-only controls. */
+@media (max-width: 767px) {
+  .mobile-bottom-nav-inner { background: #0b0b0b; }
+  .mobile-mini-player-card { min-height: 58px; }
+  .sf-panel { overflow: hidden; }
+  .group .opacity-0 { opacity: 1; }
+  .search-entity-grid { padding-right: 2px; }
+  input, textarea, select { max-width: 100%; }
 }

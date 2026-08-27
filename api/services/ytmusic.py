@@ -228,6 +228,27 @@ def get_album(album_id: str) -> dict:
         "tracks": tracks,
     }
 
+def get_playlist(playlist_id: str) -> dict:
+    data = _client().get_playlist(playlist_id, limit=100)
+    tracks = []
+    for item in data.get("tracks") or []:
+        try:
+            track = _to_track(item)
+            if track and track.get("id"):
+                tracks.append(track)
+        except Exception:
+            continue
+    return {
+        "id": playlist_id,
+        "type": "playlist",
+        "name": data.get("title") or "Playlist",
+        "description": data.get("description") or "",
+        "thumbnail": _best_thumbnail(data.get("thumbnails")),
+        "artwork": _artwork(data.get("thumbnails")),
+        "tracks": tracks,
+    }
+
+
 def get_song(video_id: str) -> Optional[dict]:
     """Look up a single track's metadata by video id."""
     data: dict[str, Any] = _client().get_song(video_id)

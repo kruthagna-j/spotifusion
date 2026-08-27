@@ -13,6 +13,7 @@ import Settings from '@/pages/Settings'
 import RecentlyPlayed from '@/pages/RecentlyPlayed'
 import Discover from '@/pages/Discover'
 import Collection from '@/pages/Collection'
+import YouTubePlaylist from '@/pages/YouTubePlaylist'
 import NowPlayingRoute from '@/pages/NowPlayingRoute'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="/discover" element={<Discover />} />
               <Route path="/artist/:value" element={<Collection type="artist" />} />
               <Route path="/album/:value" element={<Collection type="album" />} />
+              <Route path="/youtube-playlist/:id" element={<YouTubePlaylist />} />
               <Route path="/now-playing" element={<NowPlayingRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -92,6 +92,16 @@ export async function getAlbum(albumId) {
   return body
 }
 
+export async function getPlaylist(playlistId) {
+  if (!playlistId || !auth.currentUser) return null
+  const key = `playlist:${playlistId}`
+  const cached = getCached(songCache, key, ENTITY_CACHE_TTL)
+  if (cached) return cached
+  const body = await coalesce(key, () => request(`/api/playlist/${encodeURIComponent(playlistId)}`))
+  if (body) setCached(songCache, key, body, MAX_ENTITY_CACHE)
+  return body
+}
+
 export async function getSong(videoId) {
   if (!videoId || !auth.currentUser) return null
   const cached = getCached(songCache, videoId, ENTITY_CACHE_TTL)

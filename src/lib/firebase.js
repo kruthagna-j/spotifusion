@@ -1,9 +1,11 @@
 import { initializeApp } from 'firebase/app'
 import {
   getAuth,
+  initializeAuth,
+  browserLocalPersistence,
+  browserSessionPersistence,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
   signOut as fbSignOut,
   onAuthStateChanged,
 } from 'firebase/auth'
@@ -25,35 +27,30 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+let auth
+try {
+  auth = initializeAuth(app, {
+    persistence: [browserLocalPersistence, browserSessionPersistence],
+  })
+} catch (err) {
+  // Hot reload / already-initialized Firebase fallback.
+  if (err?.code === 'auth/already-initialized') {
+    auth = getAuth(app)
+  } else {
+    throw err
+  }
+}
+export { auth }
 export const db = getFirestore(app)
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-// Detect if we're running inside an Android WebView/TWA wrapper.
-// Popup auth is unreliable inside WebViews, so we fall back to redirect there.
-function isLikelyWebView() {
-  const ua = navigator.userAgent || ''
-  return /wv|Android.*Version\/[\d.]+.*Chrome\/[.\d]* (?!Mobile Safari)/.test(ua)
-}
-
+// Google web authentication intentionally uses the popup flow. The previous
+// WebView -> redirect fallback could lose Firebase's redirect state on mobile
+// browsers and embedded WebViews, producing "missing initial state".
 export async function signInWithGoogle() {
-  if (isLikelyWebView()) {
-    return signInWithRedirect(auth, googleProvider)
-  }
-  try {
-    return await signInWithPopup(auth, googleProvider)
-  } catch (err) {
-    // Popups blocked (common on mobile browsers) -> fall back to redirect.
-    if (
-      err.code === 'auth/popup-blocked' ||
-      err.code === 'auth/operation-not-supported-in-this-environment'
-    ) {
-      return signInWithRedirect(auth, googleProvider)
-    }
-    throw err
-  }
+  return signInWithPopup(auth, googleProvider)
 }
 
 export function signOut() {

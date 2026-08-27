@@ -26,6 +26,42 @@ import { getArtwork } from '@/lib/artwork'
 const HISTORY_KEY = 'spotifusion:search-history:v2'
 const MAX_HISTORY = 100
 const VISIBLE_HISTORY = 10
+const RESULT_CACHE_PREFIX = 'spotifusion:search-results:v3:'
+const RESULT_CACHE_TTL = 30 * 60 * 1000
+
+function searchCacheKey(query, category) {
+  return `${RESULT_CACHE_PREFIX}${category}:${normalizeQuery(query).toLowerCase()}`
+}
+
+function loadResultCache(query, category) {
+  if (!query) return null
+  try {
+    const raw = sessionStorage.getItem(searchCacheKey(query, category))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || Date.now() - parsed.time > RESULT_CACHE_TTL || !Array.isArray(parsed.results)) {
+      sessionStorage.removeItem(searchCacheKey(query, category))
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function saveResultCache(query, category, payload) {
+  if (!query || !payload || !Array.isArray(payload.results)) return
+  try {
+    sessionStorage.setItem(searchCacheKey(query, category), JSON.stringify({
+      time: Date.now(),
+      results: payload.results,
+      batch: payload.batch || 1,
+      hasMore: Boolean(payload.hasMore),
+    }))
+  } catch {
+    // Session storage is best-effort; search still works without it.
+  }
+}
 
 const CATEGORIES = [
   { id: 'all', label: 'All', icon: SearchIcon },
@@ -87,7 +123,14 @@ function EntityCard({ item }) {
   const label = type === 'artist' ? 'Artist' : type === 'album' ? 'Album' : type === 'jukebox' ? 'Jukebox' : 'Playlist'
   const image = getArtwork(item, 'large')
   const navigate = useNavigate()
-  const destination = type === 'artist' ? `/artist/${encodeURIComponent(item.browseId || item.id)}` : type === 'album' ? `/album/${encodeURIComponent(item.browseId || item.id)}` : null
+  const entityId = item.browseId || item.id
+  const destination = type === 'artist'
+    ? `/artist/${encodeURIComponent(entityId)}`
+    : type === 'album'
+      ? `/album/${encodeURIComponent(entityId)}`
+      : type === 'playlist' || type === 'jukebox'
+        ? `/youtube-playlist/${encodeURIComponent(entityId)}`
+        : null
   return (
     <button type="button" onClick={() => destination && navigate(destination, { state: { name: item.title, artwork: image, browseId: item.browseId || item.id } })} className={`sf-entity-card group text-left min-w-0 ${destination ? 'cursor-pointer' : 'cursor-default'}`}>
       <div className="relative aspect-square overflow-hidden rounded-2xl bg-surface-highlight mb-3">
@@ -123,14 +166,18 @@ export default function Search() {
   const { user, signIn } = useAuth()
   const location = useLocation()
   const online = useOnlineStatus()
-  const initial = normalizeQuery(location.state?.query || '')
+  const params = new URLSearchParams(location.search)
+  const urlQuery = normalizeQuery(params.get('q') || '')
+  const urlCategory = CATEGORIES.some((item) => item.id === params.get('category')) ? params.get('category') : 'all'
+  const initial = urlQuery || normalizeQuery(location.state?.query || '')
+  const initialCache = loadResultCache(initial, urlCategory)
 
   const [query, setQuery] = useState(initial)
   const [submittedQuery, setSubmittedQuery] = useState(initial)
-  const [category, setCategory] = useState('all')
-  const [results, setResults] = useState([])
-  const [batch, setBatch] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
+  const [category, setCategory] = useState(urlCategory)
+  const [results, setResults] = useState(initialCache?.results || [])
+  const [batch, setBatch] = useState(initialCache?.batch || 0)
+  const [hasMore, setHasMore] = useState(Boolean(initialCache?.hasMore))
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
@@ -199,9 +246,11 @@ export default function Search() {
       try {
         const page = await searchMusicPage(q, { category: selectedCategory, batch: 1, signal: controller.signal })
         if (controller.signal.aborted) return
-        setResults(Array.isArray(page.results) ? page.results : [])
+        const nextResults = Array.isArray(page.results) ? page.results : []
+        setResults(nextResults)
         setBatch(1)
-        setHasMore(Boolean(page.hasMore) && page.results?.length > 0)
+        setHasMore(Boolean(page.hasMore) && nextResults.length > 0)
+        saveResultCache(q, selectedCategory, { ...page, results: nextResults, batch: 1 })
       } catch (err) {
         if (err?.name === 'AbortError') return
         setResults([])
@@ -233,9 +282,11 @@ export default function Search() {
         return true
       })
       if (fresh.length > 0) {
-        setResults((current) => [...current, ...fresh])
+        const merged = [...resultsRef.current, ...fresh]
+        setResults(merged)
         setBatch(nextBatch)
         setHasMore(Boolean(page.hasMore))
+        saveResultCache(q, selectedCategory, { ...page, results: merged, batch: nextBatch })
       } else {
         // The provider has no new continuation/results. Stop the observer so
         // we don't hammer the backend with identical empty pages.
@@ -250,7 +301,24 @@ export default function Search() {
   }, [user])
 
   useEffect(() => {
+    // Browser back/forward and deep links must restore the search instead of
+    // leaving an empty page. Search state is represented in the URL and the
+    // recent result cache makes returning from an album/playlist instant.
+    const nextQuery = urlQuery || normalizeQuery(location.state?.query || '')
+    if (nextQuery !== submittedQuery || urlCategory !== category) {
+      const cached = loadResultCache(nextQuery, urlCategory)
+      setQuery(nextQuery)
+      setSubmittedQuery(nextQuery)
+      setCategory(urlCategory)
+      setResults(cached?.results || [])
+      setBatch(cached?.batch || 0)
+      setHasMore(Boolean(cached?.hasMore))
+    }
+  }, [urlQuery, urlCategory, location.state, submittedQuery, category])
+
+  useEffect(() => {
     if (!user || !submittedQuery) return
+    if (batch > 0 && results.length > 0) return
     loadBatch(submittedQuery, category, 1, true)
   }, [submittedQuery, category, user, loadBatch])
 
@@ -279,7 +347,8 @@ export default function Search() {
     setBatch(0)
     setHasMore(false)
     setError(null)
-  }, [query])
+    navigate(`/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}`)
+  }, [query, category, navigate])
 
   const clearSearch = () => {
     abortRef.current?.abort()
@@ -292,6 +361,7 @@ export default function Search() {
     setError(null)
     setLoading(false)
     setLoadingMore(false)
+    navigate('/search')
   }
 
   const selectCategory = (nextCategory) => {
@@ -301,6 +371,10 @@ export default function Search() {
     setBatch(0)
     setHasMore(false)
     setError(null)
+    const params = new URLSearchParams()
+    if (submittedQuery) params.set('q', submittedQuery)
+    params.set('category', nextCategory)
+    navigate(`/search?${params.toString()}`)
   }
 
   const clearHistory = () => {

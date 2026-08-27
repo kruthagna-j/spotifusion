@@ -221,6 +221,24 @@ def album(request: Request, album_id: str, _user=Depends(require_firebase_user))
         raise HTTPException(502, "Unable to fetch this album right now. Please try again.") from exc
     return payload
 
+@app.get("/api/playlist/{playlist_id}")
+@limiter.limit(SONG_RATE_LIMIT)
+def playlist(request: Request, playlist_id: str, _user=Depends(require_firebase_user)):
+    if not playlist_id or len(playlist_id) > 128:
+        raise HTTPException(400, "Invalid playlist id.")
+    key = cache.normalize_key("playlist:v1", playlist_id)
+    try:
+        payload, _ = _cached_upstream(
+            key,
+            lambda: ytmusic.get_playlist(playlist_id),
+            ttl=int(os.getenv("ENTITY_CACHE_TTL", str(6 * 3600))),
+        )
+    except Exception as exc:
+        logger.error("Playlist lookup failed for id=%r: %s", playlist_id, exc)
+        raise HTTPException(502, "Unable to fetch this playlist right now. Please try again.") from exc
+    return payload
+
+
 @app.get("/api/song/{video_id}")
 @limiter.limit(SONG_RATE_LIMIT)
 def song(request:Request,video_id:str,_user=Depends(require_firebase_user)):

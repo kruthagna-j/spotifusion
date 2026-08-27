@@ -13,6 +13,8 @@ import {
   Pencil,
 } from 'lucide-react'
 import { doc, onSnapshot } from 'firebase/firestore'
+import { getSong } from '@/lib/musicApi'
+import { getArtwork } from '@/lib/artwork'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
@@ -67,6 +69,7 @@ export default function Playlist() {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     if (!user) {
@@ -74,16 +77,48 @@ export default function Playlist() {
       return
     }
     setLoading(true)
-    return onSnapshot(doc(db, `users/${user.uid}/playlists/${id}`), (snap) => {
-      setPlaylist(snap.exists() ? { id: snap.id, ...snap.data() } : null)
-      setLoading(false)
-    })
+    setLoadError(null)
+    return onSnapshot(
+      doc(db, `users/${user.uid}/playlists/${id}`),
+      (snap) => {
+        setPlaylist(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+        setLoading(false)
+      },
+      (err) => {
+        console.error('[Spotifusion] playlist listener failed:', err)
+        setLoadError(err?.code === 'permission-denied'
+          ? 'You are not authorized to view this playlist. Please sign in again.'
+          : 'Unable to load this playlist right now. Please try again.')
+        setLoading(false)
+      },
+    )
   }, [user, id])
 
   const allTracks = useMemo(
     () => (playlist?.trackIds || []).map((tid) => playlist.tracks?.[tid]).filter(Boolean),
     [playlist]
   )
+
+  // Older playlists may contain trackIds without the denormalized `tracks`
+  // map. Hydrate those IDs from the music service so old playlists still open.
+  useEffect(() => {
+    if (!playlist || !user || !playlist.trackIds?.length) return
+    const missingIds = playlist.trackIds.filter((tid) => !playlist.tracks?.[tid]).slice(0, 25)
+    if (!missingIds.length) return
+    let cancelled = false
+    Promise.all(missingIds.map((tid) => getSong(tid).catch(() => null))).then((items) => {
+      if (cancelled) return
+      const found = items.filter(Boolean)
+      if (!found.length) return
+      setPlaylist((current) => {
+        if (!current) return current
+        const tracks = { ...(current.tracks || {}) }
+        found.forEach((track) => { tracks[track.id] = { ...track, addedAt: tracks[track.id]?.addedAt || Date.now() } })
+        return { ...current, tracks }
+      })
+    })
+    return () => { cancelled = true }
+  }, [playlist, user])
 
   const filteredTracks = useMemo(() => {
     const q = findQuery.trim().toLowerCase()
@@ -117,7 +152,7 @@ export default function Playlist() {
   }
 
   if (!playlist) {
-    return <div className="p-6 text-text-muted">Playlist not found.</div>
+    return <div className="p-6 md:p-8"><div className="sf-panel p-6 text-center"><p className="text-red-300 text-sm">{loadError || 'Playlist not found.'}</p><button onClick={() => navigate('/library')} className="inline-flex mt-5 bg-brand text-black px-5 py-2.5 rounded-full font-bold">Back to Library</button></div></div>
   }
 
   function playShuffled() {
@@ -136,10 +171,13 @@ export default function Playlist() {
   }
 
   return (
-    <div>
-      <div className="flex items-end gap-6 p-6 bg-gradient-to-b from-surface-elevated to-transparent">
-        <div className="w-32 h-32 md:w-48 md:h-48 rounded-md shadow-card bg-surface-highlight flex items-center justify-center text-5xl shrink-0">
-          🎵
+    <div className="min-w-0 overflow-x-hidden">
+      <div className="p-4 md:p-6">
+        <button onClick={() => navigate('/library')} className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text mb-4">← Back to Library</button>
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-end gap-5 p-5 md:p-6 bg-gradient-to-b from-surface-elevated to-transparent">
+        <div className="w-36 h-36 md:w-48 md:h-48 rounded-2xl shadow-card bg-surface-highlight overflow-hidden flex items-center justify-center text-5xl shrink-0">
+          {playlist.coverUrl || allTracks[0] ? <img src={playlist.coverUrl || getArtwork(allTracks[0], 'large')} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display='none' }} /> : '🎵'}
         </div>
         <div>
           <p className="text-xs font-bold uppercase">Playlist</p>
