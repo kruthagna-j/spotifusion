@@ -124,6 +124,63 @@ input:focus-visible,
 .icon-button{width:34px;height:34px;border-radius:999px;display:grid;place-items:center;color:#aaa}.icon-button:hover{background:#242424;color:#fff}
 .sf-hero{background:radial-gradient(circle at 80% 15%,rgba(30,215,96,.22),transparent 34%),linear-gradient(135deg,#171717 0%,#0b0b0b 72%);border:1px solid rgba(255,255,255,.06);border-radius:22px}
 
+
+/* Comfortable search category selector */
+.search-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(92px, 1fr));
+  gap: 8px;
+  width: min(100%, 900px);
+  margin: 0 0 24px;
+  padding: 6px;
+  background: #101010;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 16px;
+}
+.search-category-tab {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: .82rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, transform .15s ease;
+}
+.search-category-tab:hover { background: rgba(255,255,255,.07); color: #fff; }
+.search-category-tab.is-active { background: #fff; color: #000; box-shadow: 0 4px 14px rgba(0,0,0,.28); }
+.search-category-tab:active { transform: scale(.98); }
+
+@media (max-width: 900px) {
+  .search-category-tabs {
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding: 5px;
+  }
+  .search-category-tabs::-webkit-scrollbar { display: none; }
+  .search-category-tab {
+    flex: 0 0 auto;
+    min-width: 104px;
+    min-height: 46px;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-category-tabs { margin-bottom: 18px; border-radius: 14px; }
+  .search-category-tab { min-width: 96px; padding-inline: 10px; font-size: .78rem; }
+}
+
 /* Responsive app shell: mobile is a contained application viewport. */
 html, body, #root { width: 100%; min-width: 0; overflow: hidden; }
 body { overscroll-behavior: none; }

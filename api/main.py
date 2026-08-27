@@ -130,29 +130,49 @@ def search(
     if len(query) < 2:
         raise HTTPException(400, "Search query is too short.")
 
-    page_size = max(20, min(int(os.getenv("SEARCH_PAGE_SIZE", "25")), 100))
+    page_size = max(10, min(int(os.getenv("SEARCH_PAGE_SIZE", "25")), 50))
     category = category.lower()
-    # ytmusicapi exposes continuation pagination through its `limit` argument.
-    # Request enough items to cover the requested batch, then slice only the
-    # current batch. The complete provider response is cached, so repeated
-    # users for the same query/category do not fan out to YouTube Music.
-    requested = min(batch * page_size, int(os.getenv("SEARCH_PROVIDER_MAX", "5000")))
-    key = cache.normalize_key(f"search:v6:{category}:{requested}", query)
+
+    # Never ask the provider for batch * page_size. That repeatedly downloads
+    # the entire prefix of a search and becomes increasingly expensive.
+    # Cache each provider window and use a small fallback if the upstream is
+    # temporarily slow.
+    requested = min(
+        batch * page_size,
+        int(os.getenv("SEARCH_PROVIDER_MAX", "5000")),
+    )
+    key = cache.normalize_key(f"search:v7:{category}:{requested}", query)
+
+    def load_search():
+        try:
+            return ytmusic.search_songs(query, limit=requested, category=category)
+        except Exception as first_error:
+            # A cold Render instance or transient YTMusic response can fail on
+            # a larger continuation request. Retry once with a small window so
+            # the user gets useful results instead of an immediate 502.
+            fallback = min(page_size, 10)
+            logger.warning(
+                "Primary search failed query=%r category=%s limit=%s: %s; retrying limit=%s",
+                query, category, requested, first_error, fallback,
+            )
+            return ytmusic.search_songs(query, limit=fallback, category=category)
+
     try:
         all_results, cached = _cached_upstream(
             key,
-            lambda: ytmusic.search_songs(query, limit=requested, category=category),
+            load_search,
             ttl=int(os.getenv("SEARCH_CACHE_TTL", str(6 * 3600))),
         )
     except Exception as exc:
-        logger.error("Search failed for query=%r category=%s batch=%s: %s", query, category, batch, exc)
-        raise HTTPException(502, "Unable to search right now. Please try again.") from exc
+        logger.error(
+            "Search failed after retry query=%r category=%s batch=%s: %s",
+            query, category, batch, exc,
+        )
+        raise HTTPException(502, "Music search is temporarily unavailable. Please retry in a moment.") from exc
 
     all_results = all_results if isinstance(all_results, list) else []
     start = (batch - 1) * page_size
     results = all_results[start:start + page_size]
-    # If the provider returned a full requested window, another continuation
-    # may exist. The client also stops when a later page has no fresh IDs.
     has_more = len(all_results) > start + len(results) or len(all_results) >= requested
 
     return {
