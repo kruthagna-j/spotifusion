@@ -56,21 +56,33 @@ def _to_track(item: dict) -> Optional[dict]:
         return None
 
     album = item.get("album") or {}
+    thumbs = item.get("thumbnails")
+    if not thumbs and isinstance(item.get("thumbnail"), dict):
+        thumbs = item.get("thumbnail").get("thumbnails")
+    if not thumbs and isinstance(item.get("thumbnail"), str):
+        thumbs = [{"url": item.get("thumbnail")}]
     return {
         "id": video_id,
         "title": item.get("title") or "Untitled",
         "artist": _artist_name(item.get("artists")),
+        "artistId": ((item.get("artists") or [{}])[0] or {}).get("id"),
         "album": album.get("name") if isinstance(album, dict) else None,
+        "albumId": album.get("id") if isinstance(album, dict) else None,
         "duration": item.get("duration"),  # "M:SS" string, already display-ready
         "durationSeconds": item.get("duration_seconds"),
-        "thumbnail": _best_thumbnail(item.get("thumbnails")),
-        "artwork": _artwork(item.get("thumbnails")),
+        "thumbnail": _best_thumbnail(thumbs),
+        "artwork": _artwork(thumbs),
         "source": "youtube",
     }
 
 
 def _entity_artwork(item: dict) -> dict:
-    return _artwork(item.get("thumbnails"))
+    thumbs = item.get("thumbnails")
+    if not thumbs and isinstance(item.get("thumbnail"), dict):
+        thumbs = item.get("thumbnail").get("thumbnails")
+    if not thumbs and isinstance(item.get("thumbnail"), str):
+        thumbs = [{"url": item.get("thumbnail")}]
+    return _artwork(thumbs)
 
 
 def _to_search_entity(item: dict) -> Optional[dict]:
@@ -183,58 +195,100 @@ def search_songs(query: str, limit: int = 100, category: str = "all") -> list[di
     return entities
 
 
+def _entity_item(item: dict, kind: str) -> Optional[dict]:
+    if not isinstance(item, dict):
+        return None
+    item_id = item.get("browseId") or item.get("albumId") or item.get("playlistId") or item.get("videoId")
+    if not item_id:
+        return None
+    artwork = _entity_artwork(item)
+    title = item.get("title") or item.get("name") or "Untitled"
+    artists = _artist_name(item.get("artists"))
+    return {
+        "id": item_id,
+        "type": kind,
+        "title": title,
+        "name": title,
+        "artist": artists,
+        "subtitle": item.get("year") or artists or kind.title(),
+        "thumbnail": artwork.get("large"),
+        "artwork": artwork,
+        "source": "youtube",
+    }
+
+
 def get_artist(artist_id: str) -> dict:
-    """Return an artist header plus tracks the artist performs/writes when
-    YouTube Music exposes them. get_artist is far more accurate than searching
-    the artist name and filtering arbitrary search results."""
     data = _client().get_artist(artist_id)
-    tracks = []
-    for key in ("songs", "albums", "singles", "videos"):
+    tracks, albums, singles = [], [], []
+    seen_tracks, seen_albums = set(), set()
+    for key in ("songs", "videos"):
         for item in data.get(key) or []:
             try:
                 track = _to_track(item)
-                if track and track.get("id") not in {t.get("id") for t in tracks}:
-                    tracks.append(track)
+                if track and track.get("id") not in seen_tracks:
+                    seen_tracks.add(track.get("id")); tracks.append(track)
             except Exception:
                 continue
+    for key, target in (("albums", albums), ("singles", singles)):
+        for item in data.get(key) or []:
+            entity = _entity_item(item, "album")
+            if entity and entity["id"] not in seen_albums:
+                seen_albums.add(entity["id"]); target.append(entity)
+    artwork = _entity_artwork(data)
     return {
         "id": artist_id,
         "type": "artist",
         "name": data.get("name") or "Artist",
         "description": data.get("description") or "",
-        "thumbnail": _best_thumbnail(data.get("thumbnails")),
-        "artwork": _artwork(data.get("thumbnails")),
+        "thumbnail": artwork.get("large"),
+        "artwork": artwork,
         "tracks": tracks,
+        "albums": albums,
+        "singles": singles,
     }
 
 
 def get_album(album_id: str) -> dict:
     data = _client().get_album(album_id)
     tracks = []
+    album_artwork = _entity_artwork(data)
     for item in data.get("tracks") or []:
         try:
             track = _to_track(item)
             if track:
+                # Album track objects sometimes omit their own thumbnails.
+                # Reuse the album artwork rather than rendering an empty box.
+                if not track.get("thumbnail"):
+                    track["thumbnail"] = album_artwork.get("large")
+                    track["artwork"] = album_artwork
                 tracks.append(track)
         except Exception:
             continue
+    artist_name = _artist_name(data.get("artists"))
     return {
         "id": album_id,
         "type": "album",
         "name": data.get("title") or "Album",
+        "artist": artist_name,
+        "year": data.get("year"),
         "description": data.get("description") or "",
-        "thumbnail": _best_thumbnail(data.get("thumbnails")),
-        "artwork": _artwork(data.get("thumbnails")),
+        "thumbnail": album_artwork.get("large"),
+        "artwork": album_artwork,
         "tracks": tracks,
     }
+
 
 def get_playlist(playlist_id: str) -> dict:
     data = _client().get_playlist(playlist_id, limit=100)
     tracks = []
+    playlist_artwork = _entity_artwork(data)
     for item in data.get("tracks") or []:
         try:
             track = _to_track(item)
             if track and track.get("id"):
+                if not track.get("thumbnail"):
+                    track["thumbnail"] = playlist_artwork.get("large")
+                    track["artwork"] = playlist_artwork
                 tracks.append(track)
         except Exception:
             continue
@@ -243,11 +297,10 @@ def get_playlist(playlist_id: str) -> dict:
         "type": "playlist",
         "name": data.get("title") or "Playlist",
         "description": data.get("description") or "",
-        "thumbnail": _best_thumbnail(data.get("thumbnails")),
-        "artwork": _artwork(data.get("thumbnails")),
+        "thumbnail": playlist_artwork.get("large"),
+        "artwork": playlist_artwork,
         "tracks": tracks,
     }
-
 
 def get_song(video_id: str) -> Optional[dict]:
     """Look up a single track's metadata by video id."""

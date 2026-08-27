@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useLocation, NavLink } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Search, Settings as SettingsIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Settings as SettingsIcon, UserRound } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import ProfilePanel from '@/components/ProfilePanel'
 import Logo from '@/components/Logo'
@@ -60,7 +60,7 @@ export default function TopBar() {
           {user ? (
             <>
               <button
-                onClick={() => setProfileOpen((v) => !v)}
+                onClick={() => { if (window.matchMedia?.('(max-width: 767px)').matches) navigate('/account'); else setProfileOpen((v) => !v) }}
                 aria-label="Open account menu"
                 aria-expanded={profileOpen}
                 className="flex items-center gap-2 shrink-0 bg-surface-elevated hover:bg-surface-hover rounded-full pl-1 pr-2 sm:pr-3 py-1 text-sm font-medium"
@@ -70,13 +70,13 @@ export default function TopBar() {
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-brand" />
                 )}
-                <span className="hidden sm:inline">{user.displayName?.split(' ')[0]}</span>
+                <span className="hidden sm:inline max-w-[120px] truncate">{user.displayName?.split(' ')[0]}</span>
               </button>
               {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} />}
             </>
           ) : (
             <button
-              onClick={signIn}
+              onClick={() => navigate('/login')}
               className="bg-white text-black font-bold text-xs sm:text-sm px-3 sm:px-6 py-2 rounded-full whitespace-nowrap hover:scale-105 transition-transform"
             >
               <span className="sm:hidden">Sign in</span>

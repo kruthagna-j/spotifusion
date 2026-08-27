@@ -1,4 +1,4 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
@@ -15,12 +15,24 @@ import Discover from '@/pages/Discover'
 import Collection from '@/pages/Collection'
 import YouTubePlaylist from '@/pages/YouTubePlaylist'
 import NowPlayingRoute from '@/pages/NowPlayingRoute'
+import Login from '@/pages/Login'
+import Onboarding from '@/pages/Onboarding'
+import Account from '@/pages/Account'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 
 export default function App() {
   useKeyboardShortcuts()
   const online = useOnlineStatus()
+  const location = useLocation()
+  const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
+
+  if (standalone) {
+    return <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/onboarding" element={<Onboarding />} />
+    </Routes>
+  }
 
   return (
     <div className="h-screen flex flex-col bg-bg text-text overflow-hidden">
@@ -38,6 +50,9 @@ export default function App() {
           <main className="flex-1 min-h-0 overflow-y-auto scrollbar-none pb-36 md:pb-6 overscroll-contain">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/account" element={<Account />} />
               <Route path="/search" element={<Search />} />
               <Route path="/library" element={<LibraryMobile />} />
               <Route path="/liked-songs" element={<LikedSongs />} />

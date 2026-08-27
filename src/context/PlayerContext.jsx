@@ -61,15 +61,20 @@ export function PlayerProvider({ children }) {
   const audioCtxRef = useRef(null)
   const eqFiltersRef = useRef(null)
 
-  const [queue, setQueue] = useState([]) // array of track objects
-  const [queueIndex, setQueueIndex] = useState(-1)
+  const savedPlayerState = (() => {
+    try { return JSON.parse(localStorage.getItem('spotifusion:player-state:v2') || 'null') || {} } catch { return {} }
+  })()
+  const initialQueue = Array.isArray(savedPlayerState.queue) ? savedPlayerState.queue : []
+  const initialIndex = Number.isInteger(savedPlayerState.queueIndex) && savedPlayerState.queueIndex >= 0 && savedPlayerState.queueIndex < initialQueue.length ? savedPlayerState.queueIndex : -1
+  const [queue, setQueue] = useState(initialQueue) // array of track objects
+  const [queueIndex, setQueueIndex] = useState(initialIndex)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0) // seconds
   const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState(70)
-  const [muted, setMuted] = useState(false)
-  const [shuffle, setShuffle] = useState(false)
-  const [repeatMode, setRepeatMode] = useState('off') // off | all | one
+  const [volume, setVolume] = useState(Number.isFinite(savedPlayerState.volume) ? savedPlayerState.volume : 70)
+  const [muted, setMuted] = useState(Boolean(savedPlayerState.muted))
+  const [shuffle, setShuffle] = useState(Boolean(savedPlayerState.shuffle))
+  const [repeatMode, setRepeatMode] = useState(['off','all','one'].includes(savedPlayerState.repeatMode) ? savedPlayerState.repeatMode : 'off') // off | all | one
   const [eqGains, setEqGains] = useState(EQ_PRESETS.Flat)
   const [eqPreset, setEqPreset] = useState('Flat')
   const [outputDeviceId, setOutputDeviceId] = useState(null) // null = system default
@@ -79,6 +84,17 @@ export function PlayerProvider({ children }) {
 
   const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
   const isLocal = currentTrack?.source === 'local'
+
+  // Persist navigation-independent player state. This prevents the queue from
+  // disappearing when a route remounts or the browser refreshes. Playback is
+  // intentionally not auto-started because mobile browsers block autoplay.
+  useEffect(() => {
+    try {
+      localStorage.setItem('spotifusion:player-state:v2', JSON.stringify({
+        queue, queueIndex, volume, muted, shuffle, repeatMode,
+      }))
+    } catch { /* storage is best effort */ }
+  }, [queue, queueIndex, volume, muted, shuffle, repeatMode])
 
   // Keep the latest handler in a ref so the <audio> "ended" listener (added
   // once) always calls the current repeatMode/queue-aware logic.
@@ -540,6 +556,9 @@ export function PlayerProvider({ children }) {
     muted,
     shuffle,
     repeatMode,
+    setVolume: changeVolume,
+    setMuted,
+    setRepeatMode,
     playerReady: apiReady,
     playTrack,
     togglePlay,
