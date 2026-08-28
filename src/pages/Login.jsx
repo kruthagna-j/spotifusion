@@ -4,7 +4,7 @@ import { Globe, Music2, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Login() {
-  const { user } = useAuth()
+  const { user, signIn } = useAuth()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -16,7 +16,6 @@ export default function Login() {
   async function handleGoogle() {
     setBusy(true); setError('')
     try {
-      const { signIn } = useAuth()
       await signIn()
     } catch (err) {
       console.error(err)
