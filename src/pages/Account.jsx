@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, User, Settings, LogOut, Globe2, Mic2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, User, Settings, LogOut, Globe2, Mic2, ShieldCheck, Music2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Account() {
@@ -14,6 +14,7 @@ export default function Account() {
     </section>
     <div className="sf-account-links">
       <Link to="/onboarding"><Mic2/><span><strong>Music preferences</strong><small>{profile?.favoriteArtists?.length || 0} favorite artists · {profile?.language || 'English'}</small></span></Link>
+      <Link to="/spotify-connect"><Music2/><span><strong>Spotify Connect</strong><small>Connect Spotify and choose a playback device</small></span></Link>
       <Link to="/settings"><Settings/><span><strong>Settings & privacy</strong><small>Playback, lyrics, storage and privacy</small></span></Link>
       <div className="sf-account-info"><Globe2/><span><strong>Language</strong><small>{profile?.language || 'English'}</small></span></div>
       <div className="sf-account-info"><ShieldCheck/><span><strong>Secure account</strong><small>Authentication is handled by Firebase</small></span></div>
