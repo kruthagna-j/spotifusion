@@ -20,6 +20,7 @@ import Login from '@/pages/Login'
 import Onboarding from '@/pages/Onboarding'
 import Account from '@/pages/Account'
 import SpotifyCallback from '@/pages/SpotifyCallback'
+import SpotifyConnect from '@/pages/SpotifyConnect'
 import { useAuth } from '@/context/AuthContext'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
@@ -42,12 +43,11 @@ export default function App() {
     return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
   }
 
-  // Spotifusion starts at the dedicated login screen. There is no guest bypass.
   if (!user && !standalone) return <Navigate to="/login" replace />
   if (!user && location.pathname === '/onboarding') return <Navigate to="/login" replace />
 
-  // Preferences are a mobile-app onboarding experience only. Desktop/web goes
-  // directly to the player and never gets blocked by language/artist setup.
+  // Language + artist onboarding is intentionally a mobile-app-only experience.
+  // Desktop/web users go straight to the player after Firebase login.
   if (user && mobileClient && !profile?.onboardingComplete && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
@@ -64,6 +64,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/spotify-connect" element={<SpotifyConnect />} />
         <Route path="/search" element={<Search />} />
         <Route path="/library" element={<LibraryMobile />} />
         <Route path="/liked-songs" element={<LikedSongs />} />
