@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
@@ -19,7 +19,6 @@ import NowPlayingRoute from '@/pages/NowPlayingRoute'
 import Login from '@/pages/Login'
 import Onboarding from '@/pages/Onboarding'
 import Account from '@/pages/Account'
-import { useAuth } from '@/context/AuthContext'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 
@@ -27,15 +26,7 @@ export default function App() {
   useKeyboardShortcuts()
   const online = useOnlineStatus()
   const location = useLocation()
-  const navigate = useNavigate()
-  const { user, profile } = useAuth()
   const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
-
-  useEffect(() => {
-    if (user && profile && !profile.onboardingComplete && !standalone) {
-      navigate('/onboarding', { replace: true, state: { returnTo: location.pathname + location.search } })
-    }
-  }, [user, profile, standalone, navigate, location.pathname, location.search])
 
   if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /></Routes>
 
