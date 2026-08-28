@@ -4,14 +4,14 @@ import { Globe, Music2, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Login() {
-  const { user, profile, signIn } = useAuth()
+  const { user, signIn } = useAuth()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (user) navigate(profile?.onboardingComplete ? '/' : '/onboarding', { replace: true })
-  }, [user, profile, navigate])
+    if (user) navigate('/', { replace: true })
+  }, [user, navigate])
 
   async function handleGoogle() {
     setBusy(true); setError('')
@@ -33,7 +33,6 @@ export default function Login() {
       <p className="text-xs text-brand uppercase tracking-[.25em] font-black mt-10">Music without limits</p>
       <h1 className="text-4xl sm:text-5xl font-black mt-3 leading-tight">Your music.<br/><span className="text-brand">Your way.</span></h1>
       <p className="text-sm text-text-muted mt-4 leading-6">Sign in to sync your library, save favorites, personalize your music and keep your player experience connected.</p>
-
       <button onClick={handleGoogle} disabled={busy} className="sf-login-google">
         <Globe size={19}/><span>{busy ? 'Connecting…' : 'Continue with Google'}</span><ArrowRight size={17} className="ml-auto"/>
       </button>
