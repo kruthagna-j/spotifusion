@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.spotifusion.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.spotifusion.app'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    // A debug APK is always signed by Android/Gradle and can be installed directly.
+    // The release build below intentionally uses the debug signing key for this
+    // project-preview APK. Replace it with a private release key before Play Store use.
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.debug
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
