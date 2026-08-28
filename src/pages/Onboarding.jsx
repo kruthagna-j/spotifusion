@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, Search, ArrowRight, ArrowLeft, LoaderCircle, Music2 } from 'lucide-react'
+import { Check, Search, ArrowRight, ArrowLeft, LoaderCircle, Music2, HardDrive } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { saveUserPreferences } from '@/lib/firebase'
 import { searchMusicPage } from '@/lib/search'
 import { getArtwork } from '@/lib/artwork'
 
-const LANGUAGES = ['English', 'Telugu', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Bengali']
+const LANGUAGES = ['English', 'Telugu', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Punjabi', 'Gujarati', 'Odia']
+const LOCAL_MUSIC_KEY = 'spotifusion:local-music-enabled:v1'
 
 export default function Onboarding() {
   const { user, profile, setProfile } = useAuth()
@@ -17,6 +18,12 @@ export default function Onboarding() {
   const [step, setStep] = useState(1)
   const [languages, setLanguages] = useState(initialLanguages)
   const [artists, setArtists] = useState(profile?.favoriteArtists || [])
+  const [localMusicEnabled, setLocalMusicEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_MUSIC_KEY)
+      return stored === null ? true : stored === 'true'
+    } catch { return true }
+  })
   const [query, setQuery] = useState('')
   const [artistResults, setArtistResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -60,11 +67,13 @@ export default function Onboarding() {
         languages,
         language: languages[0],
         favoriteArtists: artists,
+        localMusicEnabled,
         onboardingComplete: true,
       }
+      try { localStorage.setItem(LOCAL_MUSIC_KEY, String(localMusicEnabled)) } catch {}
       await saveUserPreferences(user.uid, preferences)
       setProfile((prev) => ({ ...(prev || {}), ...preferences }))
-      navigate(editMode ? '/settings' : '/', { replace: true })
+      navigate(editMode ? '/local-files' : '/', { replace: true })
     } catch (err) { setError(err?.message || 'Could not save your preferences.') }
     finally { setSaving(false) }
   }
@@ -115,14 +124,31 @@ export default function Onboarding() {
 
       {step === 3 && <>
         <p className="text-xs uppercase tracking-[.18em] text-brand font-black">Step 3 of 3</p>
-        <h1 className="sf-onboarding-title text-[clamp(2rem,7vw,3.5rem)] leading-[1.05]">Your music, your way.</h1>
-        <p className="text-sm text-text-muted mb-6">We'll use these preferences when building personalized music sections.</p>
-        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4 space-y-4">
-          <div><span className="text-xs text-text-subdued block mb-1">Languages</span><strong className="text-sm leading-6">{languages.join(' · ')}</strong></div>
-          <div><span className="text-xs text-text-subdued block mb-1">Favorite artists</span><strong className="text-sm leading-6">{artists.length ? artists.map((x) => x.name).join(', ') : 'None selected'}</strong></div>
+        <h1 className="sf-onboarding-title text-[clamp(2rem,7vw,3.5rem)] leading-[1.05]">Use music from your device.</h1>
+        <p className="text-sm text-text-muted mb-5">Keep your own MP3, WAV and other audio files in Spotifusion. Local audio stays on this device and is never uploaded by Spotifusion.</p>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-xl bg-brand/10 text-brand grid place-items-center shrink-0"><HardDrive size={20}/></span>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">Local music</p>
+              <p className="text-xs text-text-subdued mt-1">Enable Local Music to add files from your phone or computer.</p>
+            </div>
+            <button type="button" role="switch" aria-checked={localMusicEnabled} aria-label="Enable local music"
+              onClick={() => setLocalMusicEnabled((v) => !v)}
+              className={`relative w-12 h-7 rounded-full shrink-0 transition ${localMusicEnabled ? 'bg-brand' : 'bg-white/15'}`}>
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${localMusicEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <div className="mt-4 rounded-xl bg-black/20 border border-white/5 p-3 text-xs text-text-muted leading-5">
+            {localMusicEnabled
+              ? 'After setup, open Library → Local Music and tap Add Files to choose songs from your device. On supported browsers you can also connect a music folder.'
+              : 'Local Music is off. You can enable it later from Settings.'}
+          </div>
         </div>
+
         {error && <p className="text-xs text-red-300 mt-4">{error}</p>}
-        <div className="flex gap-2 mt-6"><button onClick={() => setStep(2)} disabled={saving} className="sf-secondary-button flex-1"><ArrowLeft size={16}/> Back</button><button onClick={finish} disabled={saving} className="sf-primary-button flex-1">{saving ? 'Saving…' : editMode ? 'Save preferences' : 'Start listening'} <ArrowRight size={17}/></button></div>
+        <div className="flex gap-2 mt-6"><button onClick={() => setStep(2)} disabled={saving} className="sf-secondary-button flex-1"><ArrowLeft size={16}/> Back</button><button onClick={finish} disabled={saving} className="sf-primary-button flex-1">{saving ? 'Saving…' : editMode ? 'Save preferences' : 'Finish setup'} <ArrowRight size={17}/></button></div>
       </>}
     </div>
   </div>
