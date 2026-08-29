@@ -1,48 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Bell, Clock3, Heart, Menu, Music2, Play, Search, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Heart, Library, Music2, Play, Search, Settings2, Sparkles, Clock3 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useRecentlyPlayedStatus, usePlaylistsStatus, useLikedSongsStatus } from '@/hooks/useLibraryData'
+import { useRecentlyPlayedStatus, useLikedSongsStatus } from '@/hooks/useLibraryData'
 import { useLocalSongs } from '@/lib/localMusicDb'
 import { usePlayer } from '@/context/PlayerContext'
 import { getDiscover } from '@/lib/musicApi'
 import { searchMusicPage } from '@/lib/search'
 import { getArtwork } from '@/lib/artwork'
 
-function TrackCard({ track, tracks, player }) { return <button onClick={() => player.playTrack(track, tracks)} className="group text-left min-w-0 w-full"><div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-surface-highlight mb-3">{getArtwork(track,'medium') ? <img src={getArtwork(track,'medium')} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover"/> : <div className="w-full h-full grid place-items-center"><Music2 size={32}/></div>}<span className="absolute right-2 bottom-2 w-10 h-10 rounded-full bg-brand text-black grid place-items-center opacity-0 group-hover:opacity-100 transition-all"><Play size={17} fill="currentColor"/></span></div><p className="font-bold text-sm truncate">{track.title}</p><p className="text-xs text-text-muted truncate mt-1">{track.artist || 'Unknown artist'}</p></button> }
-function Quick({to,icon:Icon,title,text}) { return <Link to={to} className="sf-panel p-4 md:p-5 group hover:bg-white/[.07] transition min-w-0"><div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-brand/15 text-brand grid place-items-center mb-3"><Icon size={20}/></div><h3 className="font-black truncate">{title}</h3><p className="text-xs text-text-muted mt-1 line-clamp-2">{text}</p><ArrowRight size={15} className="mt-4 text-text-subdued"/></Link> }
-function MusicSection({section,player}) { const tracks=section?.tracks||[]; if(!tracks.length)return null; return <section className="min-w-0"><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-brand uppercase tracking-widest font-black">{section.label||'Music'}</p><h2 className="text-xl md:text-2xl font-black mt-1">{section.title}</h2>{section.subtitle&&<p className="text-xs text-text-subdued mt-1">{section.subtitle}</p>}</div><Link to="/discover" className="text-sm font-bold text-text-muted">See all</Link></div><div className="music-card-row">{tracks.map(t=><TrackCard key={`${section.id}-${t.id}`} track={t} tracks={tracks} player={player}/>)}</div></section> }
+const chips=['All','Music','Podcasts','Live']
 
-export default function Home() {
-  const {user,profile,signIn}=useAuth(); const player=usePlayer()
-  const {data:recent=[],loading:recentLoading}=useRecentlyPlayedStatus(user?.uid,12)
-  const {data:playlists=[]}=usePlaylistsStatus(user?.uid); const {data:liked=[]}=useLikedSongsStatus(user?.uid); const [localSongs]=useLocalSongs()
-  const [discover,setDiscover]=useState({sections:[]}); const [discoverLoading,setDiscoverLoading]=useState(false); const [recommended,setRecommended]=useState([])
+function Art({track,className=''}){const src=getArtwork(track,'medium');return src?<img src={src} alt="" className={className}/> : <div className={`${className} grid place-items-center bg-[#111817]`}><Music2 size={28}/></div>}
 
-  useEffect(()=>{ if(!user||!navigator.onLine)return; let cancelled=false; setDiscoverLoading(true); getDiscover().then(v=>{if(!cancelled)setDiscover(v||{sections:[]})}).catch(()=>{}).finally(()=>{if(!cancelled)setDiscoverLoading(false)}); return()=>{cancelled=true} },[user])
+function Track({track,tracks,player}){return <button className="neon-track w-full text-left" onClick={()=>player.playTrack(track,tracks)}><Art track={track}/><span className="neon-track-main"><span className="neon-track-title block">{track.title}</span><span className="neon-track-artist block">{track.artist||'Unknown artist'}</span></span><span className="neon-track-time">{track.duration||track.length||''}</span><span className="text-[#66716b]">•••</span></button>}
 
-  useEffect(()=>{
-    if(!user||!navigator.onLine)return; let cancelled=false
-    const artists=(profile?.favoriteArtists||[]).map(a=>typeof a==='string'?a:(a?.name||a?.title||'')).filter(Boolean).slice(0,5)
-    const languages=(profile?.languages||[]).filter(Boolean).slice(0,3)
-    const queries=[...artists,...languages.map(l=>`${l} songs`)].slice(0,8)
-    if(!queries.length){setRecommended([]);return}
-    Promise.all(queries.map(q=>searchMusicPage(q,{category:'songs',batch:1}).catch(()=>({results:[]})))).then(parts=>{
-      if(cancelled)return; const seen=new Set(); const merged=parts.flatMap(x=>x.results||[]).filter(t=>t?.id&&!seen.has(t.id)&&seen.add(t.id)).slice(0,20); setRecommended(merged)
-    })
-    return()=>{cancelled=true}
-  },[user,profile?.favoriteArtists,profile?.languages])
+export default function Home(){
+ const {user,profile}=useAuth(); const player=usePlayer(); const [tab,setTab]=useState('All'); const [discover,setDiscover]=useState({sections:[]});
+ const {data:recent=[]}=useRecentlyPlayedStatus(user?.uid,12); const {data:liked=[]}=useLikedSongsStatus(user?.uid); const [localSongs]=useLocalSongs();
+ const [recommended,setRecommended]=useState([])
+ useEffect(()=>{if(!user||!navigator.onLine)return;let dead=false;getDiscover().then(v=>{if(!dead)setDiscover(v||{sections:[]})}).catch(()=>{});return()=>{dead=true}},[user])
+ useEffect(()=>{if(!user||!navigator.onLine)return;let dead=false;const artists=(profile?.favoriteArtists||[]).map(a=>typeof a==='string'?a:a?.name).filter(Boolean).slice(0,4);const languages=(profile?.languages||[]).filter(Boolean).slice(0,2);const qs=[...artists,...languages.map(x=>`${x} songs`)].slice(0,6);if(!qs.length){setRecommended([]);return}Promise.all(qs.map(q=>searchMusicPage(q,{category:'songs',batch:1}).catch(()=>({results:[]})))).then(xs=>{if(dead)return;const seen=new Set();setRecommended(xs.flatMap(x=>x.results||[]).filter(t=>t?.id&&!seen.has(t.id)&&seen.add(t.id)).slice(0,8))});return()=>{dead=true}},[user,profile?.favoriteArtists,profile?.languages])
+ const mixes=useMemo(()=>recent.length?recent:liked.length?liked:localSongs,[recent,liked,localSongs]); const trending=discover.sections?.flatMap(s=>s.tracks||[]).slice(0,7)||[]; const feed=recommended.length?recommended:trending
+ return <div className="neon-app min-h-full">
+  <div className="neon-home">
+   <header className="neon-topbar"><button className="neon-icon-btn" aria-label="Menu"><Menu size={20}/></button><div className="neon-brand"><span className="neon-logo"><Music2 size={19}/></span>Spotifusion</div><button className="neon-icon-btn" aria-label="Notifications"><Bell size={19}/></button></header>
+   <section className="neon-greeting"><div><h1>Good evening{profile?.displayName?`, ${profile.displayName.split(' ')[0]}`:''} 👋</h1><p>Your music universe is waiting.</p></div>{profile?.photoURL?<img className="neon-avatar" src={profile.photoURL} alt=""/>:<div className="neon-avatar bg-[#18221e] grid place-items-center"><Music2 size={18}/></div>}</section>
+   <div className="neon-chips">{chips.map(x=><button key={x} onClick={()=>setTab(x)} className={`neon-chip ${tab===x?'active':''}`}>{x}</button>)}</div>
 
-  const mixes=useMemo(()=>recent.length?recent:liked.length?liked:localSongs,[recent,liked,localSongs])
-  const personalized=useMemo(()=>{const s=new Set();return [...liked,...recent].filter(t=>t?.id&&!s.has(t.id)&&s.add(t.id)).slice(0,12)},[liked,recent])
-  return <div className="p-4 md:p-7 max-w-[1500px] mx-auto space-y-8 md:space-y-10 overflow-x-hidden">
-    <section className="sf-hero p-6 md:p-12 overflow-hidden relative"><div className="absolute -right-20 -top-24 w-80 h-80 rounded-full bg-brand/20 blur-3xl"/><div className="relative max-w-3xl"><p className="text-brand text-xs font-black uppercase tracking-[.25em]">Music without limits</p><h1 className="text-3xl md:text-6xl font-black tracking-tight mt-3">Everything you love.<br/><span className="text-brand">One place.</span></h1><p className="text-text-muted mt-4 md:mt-5 max-w-2xl leading-7 text-sm md:text-base">Online music, your local collection, playlists, favorites, lyrics and a full-featured player in one responsive experience.</p><div className="flex flex-wrap gap-2.5 mt-6"><Link to="/search" className="sf-primary-button"><Search size={17}/> Search music</Link>{user?<Link to="/library" className="sf-secondary-button"><Library size={17}/> Your Library</Link>:<button onClick={signIn} className="sf-secondary-button">Sign in with Google</button>}</div></div></section>
-    <section><div className="mb-4"><p className="text-xs text-brand font-black uppercase tracking-widest">Quick access</p><h2 className="text-xl md:text-2xl font-black mt-1">Your Spotifusion</h2></div><div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Quick to="/search" icon={Search} title="Search" text="Songs, artists and albums"/><Quick to="/liked-songs" icon={Heart} title="Liked Songs" text={`${liked.length} saved tracks`}/><Quick to="/local-files" icon={Music2} title="Local Music" text={`${localSongs.length} tracks on device`}/><Quick to="/settings" icon={Settings2} title="Settings" text="Playback, audio and privacy"/></div></section>
-    {recommended.length>0&&<MusicSection section={{id:'recommended',label:'Made for you',title:'Recommended songs',subtitle:'Based on your selected languages and favorite artists',tracks:recommended}} player={player}/>} 
-    <section><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-text-subdued uppercase tracking-widest font-bold">Keep listening</p><h2 className="text-xl md:text-2xl font-black mt-1">{recent.length?'Recently played':'Start listening'}</h2></div><Link to="/recently-played" className="text-sm font-bold text-text-muted">See all</Link></div>{recentLoading?<div className="music-card-row">{Array.from({length:6},(_,i)=><div key={i} className="skeleton aspect-square rounded-2xl min-w-[150px]"/>)}</div>:mixes.length?<div className="music-card-row">{mixes.slice(0,12).map(t=><TrackCard key={t.id} track={t} tracks={mixes} player={player}/>)}</div>:<div className="sf-panel p-10 text-center text-text-muted">Search for your first song and it will appear here.</div>}</section>
-    {personalized.length>0&&<MusicSection section={{id:'because-you-listened',label:'For you',title:'Because you listened to these',tracks:personalized}} player={player}/>} 
-    {discoverLoading&&<section><div className="music-card-row">{Array.from({length:5},(_,i)=><div key={i} className="skeleton aspect-square rounded-2xl min-w-[150px]"/>)}</div></section>}
-    {discover.sections?.map(s=><MusicSection key={s.id} section={s} player={player}/>)}
-    <section><div className="flex items-center justify-between mb-4"><div><p className="text-xs text-text-subdued uppercase tracking-widest font-bold">Explore</p><h2 className="text-xl md:text-2xl font-black mt-1">More to discover</h2></div><Link to="/discover" className="text-sm font-bold text-text-muted">Discover</Link></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><Quick to="/discover" icon={Sparkles} title="Discover Music" text="Explore trending and popular music"/><Quick to="/library" icon={Library} title={`${playlists.length} Playlists`} text="Build and organize your collection"/><Quick to="/recently-played" icon={Clock3} title="Listening history" text="Return to tracks you played recently"/></div></section>
+   <section className="neon-section"><div className="neon-section-head"><h2>Recently played</h2><Link className="neon-see" to="/recently-played">See all</Link></div>{mixes.length?<div className="neon-scroll">{mixes.slice(0,10).map(t=><button key={t.id} className="neon-recent-card text-left" onClick={()=>player.playTrack(t,mixes)}><Art track={t} className="neon-cover"/><div className="neon-recent-title">{t.title}</div><div className="neon-recent-sub">{t.artist||'Playlist'}</div></button>):<div className="text-xs text-[#77817c] py-6">Start listening and your recent music will appear here.</div>}</div></section>
+
+   <section className="neon-section"><div className="neon-section-head"><h2>Made for you</h2><Sparkles size={16} className="text-[#1ed760]"/></div><div className="neon-mix-grid"><div className="neon-mix one"><small>PERSONAL MIX</small><h3>Daily Mix 1</h3><p>Fresh tracks built from your listening.</p><div className="neon-mix-actions"><button className="neon-heart"><Heart size={19}/></button><button className="neon-play" onClick={()=>mixes[0]&&player.playTrack(mixes[0],mixes)}><Play size={18} fill="currentColor"/></button></div></div><div className="neon-mix two"><small>DISCOVERY MIX</small><h3>Daily Mix 2</h3><p>New sounds that fit your vibe.</p><div className="neon-mix-actions"><button className="neon-heart"><Heart size={19}/></button><button className="neon-play" onClick={()=>feed[0]&&player.playTrack(feed[0],feed)}><Play size={18} fill="currentColor"/></button></div></div></div></section>
+
+   <section className="neon-section"><div className="neon-section-head"><h2>Trending now</h2><Link className="neon-see" to="/discover">See all</Link></div><div className="neon-track-list">{feed.length?feed.map(t=><Track key={t.id} track={t} tracks={feed} player={player}/>):<div className="text-xs text-[#77817c] py-6">Connect to the internet to discover trending music.</div>}</div></section>
+
+   <section className="neon-section"><div className="neon-section-head"><h2>Your shortcuts</h2></div><div className="grid grid-cols-2 gap-3"><Link to="/search" className="neon-mix !min-h-0 !p-4"><Search className="text-[#1ed760]" size={19}/><h3 className="!text-[15px] mt-3">Search music</h3><p>Find songs, artists and albums.</p></Link><Link to="/liked-songs" className="neon-mix !min-h-0 !p-4"><Heart className="text-[#1ed760]" size={19}/><h3 className="!text-[15px] mt-3">Liked Songs</h3><p>{liked.length} saved tracks.</p></Link></div></section>
   </div>
+ </div>
 }
