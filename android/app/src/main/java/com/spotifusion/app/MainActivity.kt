@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.view.WindowInsets
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -70,18 +69,21 @@ class MainActivity : Activity() {
 
     private fun applySystemBarInsets(view: WebView) {
         view.setOnApplyWindowInsetsListener { target, insets ->
-            val bars = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                insets.getInsets(WindowInsets.Type.systemBars())
+            @Suppress("DEPRECATION")
+            val top = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                insets.getInsets(android.view.WindowInsets.Type.systemBars()).top
             } else {
-                @Suppress("DEPRECATION")
-                android.graphics.Insets.of(
-                    insets.systemWindowInsetLeft,
-                    insets.systemWindowInsetTop,
-                    insets.systemWindowInsetRight,
-                    insets.systemWindowInsetBottom
-                )
+                insets.systemWindowInsetTop
             }
-            target.setPadding(0, bars.top, 0, bars.bottom)
+
+            @Suppress("DEPRECATION")
+            val bottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                insets.getInsets(android.view.WindowInsets.Type.systemBars()).bottom
+            } else {
+                insets.systemWindowInsetBottom
+            }
+
+            target.setPadding(0, top, 0, bottom)
             insets
         }
         view.requestApplyInsets()
@@ -119,12 +121,10 @@ class MainActivity : Activity() {
                 val uri = request.url
                 val host = uri.host
 
-                // Keep all Spotifusion routes inside the app.
                 if (host.equals(APP_HOST, ignoreCase = true)) {
                     return false
                 }
 
-                // External web links open in the device browser.
                 if (uri.scheme.equals("http", true) || uri.scheme.equals("https", true)) {
                     return try {
                         startActivity(Intent(Intent.ACTION_VIEW, uri))
@@ -247,7 +247,7 @@ class MainActivity : Activity() {
         fun hasMediaAccess(): Boolean = hasMediaPermission()
     }
 
-    @Deprecated("Use Activity Result APIs in new code; retained for WebView file chooser compatibility")
+    @Deprecated("Retained for WebView media permission compatibility")
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -259,7 +259,7 @@ class MainActivity : Activity() {
         }
     }
 
-    @Deprecated("WebView file chooser callback uses the legacy activity result contract")
+    @Deprecated("Retained for WebView file chooser compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
