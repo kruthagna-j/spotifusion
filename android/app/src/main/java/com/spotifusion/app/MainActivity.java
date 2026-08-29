@@ -4,10 +4,13 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -31,17 +34,48 @@ public class MainActivity extends Activity {
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+
+        Window window = getWindow();
+        window.setStatusBarColor(Color.BLACK);
+        window.setNavigationBarColor(Color.BLACK);
+        window.getDecorView().setSystemUiVisibility(0);
 
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.BLACK);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
         setContentView(webView);
+
         configureWebView();
+        applySystemBarInsets();
 
         if (state != null && state.getBundle("webview_state") != null) {
             webView.restoreState(state.getBundle("webview_state"));
         } else {
             webView.loadUrl(START_URL);
         }
+    }
+
+    private void applySystemBarInsets() {
+        webView.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            int bottom;
+
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars =
+                        insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+
+            view.setPadding(0, top, 0, bottom);
+            return insets;
+        });
+        webView.requestApplyInsets();
     }
 
     private void configureWebView() {
@@ -58,49 +92,78 @@ public class MainActivity extends Activity {
         s.setLoadsImagesAutomatically(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setUserAgentString(s.getUserAgentString() + " SpotifusionAndroid/1.1");
+        s.setUserAgentString(s.getUserAgentString() + " SpotifusionAndroid/1.2");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(webView, true);
 
-        webView.setBackgroundColor(0xFF000000);
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.addJavascriptInterface(new AndroidBridge(), "SpotifusionAndroid");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
-                Uri u = req.getUrl();
-                String host = u.getHost();
-                if (host != null && (APP_HOST.equals(host) || host.endsWith(".vercel.app"))) {
+                Uri uri = req.getUrl();
+                String host = uri.getHost();
+
+                if (host != null && APP_HOST.equalsIgnoreCase(host)) {
                     return false;
                 }
-                if ("http".equals(u.getScheme()) || "https".equals(u.getScheme())) {
-                    startActivity(new Intent(Intent.ACTION_VIEW, u));
+
+                if ("http".equalsIgnoreCase(uri.getScheme())
+                        || "https".equalsIgnoreCase(uri.getScheme())) {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
                     return true;
                 }
+
                 return false;
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            public void onReceivedError(
+                    WebView view,
+                    WebResourceRequest request,
+                    WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    Toast.makeText(MainActivity.this, "Spotifusion could not load. Check your internet connection.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Spotifusion could not load. Check your internet connection.",
+                            Toast.LENGTH_SHORT
+                    ).show();
                 }
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
-            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                if (fileCallback != null) fileCallback.onReceiveValue(null);
+            public boolean onShowFileChooser(
+                    WebView view,
+                    ValueCallback<Uri[]> callback,
+                    FileChooserParams params) {
+
+                if (fileCallback != null) {
+                    fileCallback.onReceiveValue(null);
+                }
+
                 fileCallback = callback;
-                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("audio/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                startActivityForResult(i, FILE_CHOOSER_REQUEST);
+
+                Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("audio/*");
+                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+                try {
+                    startActivityForResult(picker, FILE_CHOOSER_REQUEST);
+                } catch (Exception e) {
+                    fileCallback.onReceiveValue(null);
+                    fileCallback = null;
+                    Toast.makeText(
+                            MainActivity.this,
+                            "No audio file picker is available.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                }
+
                 return true;
             }
         });
@@ -112,11 +175,17 @@ public class MainActivity extends Activity {
 
     private boolean hasMediaPermission() {
         if (Build.VERSION.SDK_INT >= 33) {
-            return checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
+            return checkSelfPermission(
+                    Manifest.permission.READ_MEDIA_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED;
         }
+
         if (Build.VERSION.SDK_INT >= 23) {
-            return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+            return checkSelfPermission(
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED;
         }
+
         return true;
     }
 
@@ -125,24 +194,37 @@ public class MainActivity extends Activity {
             notifyWebPermission(true);
             return;
         }
+
         if (Build.VERSION.SDK_INT >= 33) {
-            requestPermissions(new String[]{Manifest.permission.READ_MEDIA_AUDIO}, MEDIA_PERMISSION_REQUEST);
+            requestPermissions(
+                    new String[]{Manifest.permission.READ_MEDIA_AUDIO},
+                    MEDIA_PERMISSION_REQUEST
+            );
         } else if (Build.VERSION.SDK_INT >= 23) {
-            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MEDIA_PERMISSION_REQUEST);
+            requestPermissions(
+                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                    MEDIA_PERMISSION_REQUEST
+            );
         }
     }
 
     private void notifyWebPermission(boolean granted) {
-        if (webView == null) return;
-        webView.post(() -> webView.evaluateJavascript(
-                "window.dispatchEvent(new CustomEvent('spotifusion-media-permission',{detail:{granted:" + granted + "}}));",
-                null));
+        if (webView == null) {
+            return;
+        }
+
+        String js =
+                "window.dispatchEvent(new CustomEvent(" +
+                "'spotifusion-media-permission'," +
+                "{detail:{granted:" + granted + "}}));";
+
+        webView.post(() -> webView.evaluateJavascript(js, null));
     }
 
     public class AndroidBridge {
         @JavascriptInterface
         public void requestMediaAccess() {
-            runOnUiThread(() -> requestMediaAccessInternal());
+            runOnUiThread(MainActivity.this::requestMediaAccessInternal);
         }
 
         @JavascriptInterface
@@ -152,36 +234,55 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
         if (requestCode == MEDIA_PERMISSION_REQUEST) {
             notifyWebPermission(hasMediaPermission());
         }
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_CHOOSER_REQUEST && fileCallback != null) {
-            Uri[] results = null;
-            if (resultCode == RESULT_OK && data != null) {
-                if (data.getClipData() != null) {
-                    int n = data.getClipData().getItemCount();
-                    results = new Uri[n];
-                    for (int i = 0; i < n; i++) results[i] = data.getClipData().getItemAt(i).getUri();
-                } else if (data.getData() != null) {
-                    results = new Uri[]{data.getData()};
-                }
-            }
-            fileCallback.onReceiveValue(results);
-            fileCallback = null;
+
+        if (requestCode != FILE_CHOOSER_REQUEST || fileCallback == null) {
+            return;
         }
+
+        Uri[] results = null;
+
+        if (resultCode == RESULT_OK && data != null) {
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                results = new Uri[count];
+
+                for (int i = 0; i < count; i++) {
+                    results[i] = data.getClipData().getItemAt(i).getUri();
+                }
+            } else if (data.getData() != null) {
+                results = new Uri[]{data.getData()};
+            }
+        }
+
+        fileCallback.onReceiveValue(results);
+        fileCallback = null;
     }
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         Bundle webState = new Bundle();
-        if (webView != null) webView.saveState(webState);
+
+        if (webView != null) {
+            webView.saveState(webState);
+        }
+
         outState.putBundle("webview_state", webState);
         super.onSaveInstanceState(outState);
     }
@@ -195,12 +296,16 @@ public class MainActivity extends Activity {
             webView.destroy();
             webView = null;
         }
+
         super.onDestroy();
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
     }
 }
