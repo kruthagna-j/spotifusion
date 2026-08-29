@@ -7,19 +7,23 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.webkit.JavascriptInterface;
 import android.view.View;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final int MEDIA_PERMISSION_REQUEST = 4101;
     private static final int FILE_CHOOSER_REQUEST = 4102;
     private static final String START_URL = "https://spotifusion.vercel.app/";
+    private static final String APP_HOST = "spotifusion.vercel.app";
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
@@ -28,10 +32,16 @@ public class MainActivity extends Activity {
     public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+
         webView = new WebView(this);
         setContentView(webView);
         configureWebView();
-        webView.loadUrl(START_URL);
+
+        if (state != null && state.getBundle("webview_state") != null) {
+            webView.restoreState(state.getBundle("webview_state"));
+        } else {
+            webView.loadUrl(START_URL);
+        }
     }
 
     private void configureWebView() {
@@ -45,9 +55,17 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setUserAgentString(s.getUserAgentString() + " SpotifusionAndroid/1.0");
+        s.setLoadsImagesAutomatically(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        s.setUserAgentString(s.getUserAgentString() + " SpotifusionAndroid/1.1");
+
+        CookieManager cookies = CookieManager.getInstance();
+        cookies.setAcceptCookie(true);
+        cookies.setAcceptThirdPartyCookies(webView, true);
 
         webView.setBackgroundColor(0xFF000000);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.addJavascriptInterface(new AndroidBridge(), "SpotifusionAndroid");
 
         webView.setWebViewClient(new WebViewClient() {
@@ -55,7 +73,7 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 String host = u.getHost();
-                if (host != null && (host.equals("spotifusion.vercel.app") || host.equals("www.spotifusion.vercel.app"))) {
+                if (host != null && (APP_HOST.equals(host) || host.endsWith(".vercel.app"))) {
                     return false;
                 }
                 if ("http".equals(u.getScheme()) || "https".equals(u.getScheme())) {
@@ -63,6 +81,13 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 return false;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Toast.makeText(MainActivity.this, "Spotifusion could not load. Check your internet connection.", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
@@ -79,6 +104,10 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
     }
 
     private boolean hasMediaPermission() {
@@ -147,6 +176,26 @@ public class MainActivity extends Activity {
             fileCallback.onReceiveValue(results);
             fileCallback = null;
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        Bundle webState = new Bundle();
+        if (webView != null) webView.saveState(webState);
+        outState.putBundle("webview_state", webState);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.stopLoading();
+            webView.setWebChromeClient(null);
+            webView.setWebViewClient(null);
+            webView.destroy();
+            webView = null;
+        }
+        super.onDestroy();
     }
 
     @Override
