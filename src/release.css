@@ -1,0 +1,240 @@
+/* Spotifusion release UI polish.
+   Loaded after index.css so the final layout is predictable on narrow phones,
+   tablets and desktop without changing player/data behavior. */
+
+:root {
+  --sf-content-max: 1500px;
+  --sf-page-gutter: 28px;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Desktop shell: calmer spacing and a stronger app-like hierarchy. */
+@media (min-width: 768px) {
+  .sf-panel {
+    border-radius: 14px;
+  }
+
+  main > div {
+    width: min(100%, var(--sf-content-max));
+  }
+
+  .music-card-row {
+    grid-auto-columns: minmax(154px, 184px);
+    gap: 18px;
+  }
+}
+
+/* Phone layout, including 360x800 devices. */
+@media (max-width: 767px) {
+  :root {
+    --sf-page-gutter: 14px;
+  }
+
+  /* Never let a page create a second horizontal viewport. */
+  #root,
+  #root > div,
+  main,
+  main > div {
+    max-width: 100vw;
+    min-width: 0;
+  }
+
+  main {
+    overscroll-behavior-x: none;
+    padding-bottom: calc(154px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Compact top bar. */
+  header.sticky {
+    min-height: 56px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    background: rgba(0, 0, 0, .94);
+    border-bottom: 1px solid rgba(255,255,255,.045);
+  }
+
+  /* Home/page containers should not look like a squeezed desktop canvas. */
+  main > div {
+    width: 100%;
+    padding-left: var(--sf-page-gutter) !important;
+    padding-right: var(--sf-page-gutter) !important;
+  }
+
+  /* Hero: visually strong, but not enormous on an 800px-tall screen. */
+  .sf-hero {
+    padding: 22px 18px !important;
+    border-radius: 18px;
+  }
+
+  .sf-hero h1 {
+    font-size: clamp(30px, 9vw, 42px) !important;
+    line-height: 1.04;
+    letter-spacing: -.04em;
+  }
+
+  .sf-hero p {
+    line-height: 1.55;
+  }
+
+  .sf-hero .sf-primary-button,
+  .sf-hero .sf-secondary-button {
+    min-height: 44px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  /* Two-column quick actions with consistent card heights. */
+  .sf-hero + section .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sf-hero + section .grid > * {
+    min-width: 0;
+  }
+
+  /* Keep track cards compact and readable. */
+  .music-card-row {
+    grid-auto-columns: minmax(138px, 43vw);
+    gap: 12px;
+    padding-bottom: 3px;
+  }
+
+  .music-card-row button {
+    min-width: 0;
+  }
+
+  .music-card-row img,
+  .music-card-row .aspect-square {
+    border-radius: 12px;
+  }
+
+  /* Section headings must never push See all off-screen. */
+  main section > .flex.items-end,
+  main section > .flex.items-center {
+    min-width: 0;
+    gap: 12px;
+  }
+
+  main section > .flex.items-end > div,
+  main section > .flex.items-center > div {
+    min-width: 0;
+  }
+
+  /* Fixed docks: visually connected but leave the page usable. */
+  .mobile-mini-player {
+    left: 10px;
+    right: 10px;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-mini-player-card {
+    min-height: 56px;
+    padding: 7px 9px;
+    border-radius: 11px;
+    background: rgba(27,27,27,.98);
+  }
+
+  .mobile-bottom-nav {
+    left: 0;
+    right: 0;
+    padding: 0;
+  }
+
+  .mobile-bottom-nav-inner {
+    max-width: none;
+    min-height: 68px;
+    border-radius: 14px 14px 0 0;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-tab {
+    min-height: 48px;
+    gap: 1px;
+    font-size: 10px;
+  }
+
+  .mobile-tab-icon {
+    width: 32px;
+    height: 27px;
+  }
+
+  /* Search tabs remain horizontally scrollable rather than wrapping. */
+  .search-category-tabs {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* Touch devices should see important actions without hover. */
+  .group .opacity-0 {
+    opacity: 1 !important;
+  }
+}
+
+@media (max-width: 380px) {
+  :root {
+    --sf-page-gutter: 12px;
+  }
+
+  .sf-hero {
+    padding: 18px 15px !important;
+  }
+
+  .sf-hero h1 {
+    font-size: 30px !important;
+  }
+
+  .sf-hero .flex.flex-wrap {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sf-hero .sf-primary-button,
+  .sf-hero .sf-secondary-button {
+    width: 100%;
+  }
+
+  .music-card-row {
+    grid-auto-columns: minmax(132px, 43vw);
+    gap: 10px;
+  }
+
+  .mobile-mini-player {
+    left: 7px;
+    right: 7px;
+  }
+
+  .mobile-bottom-nav-inner {
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+/* Prevent accidental layout breakage from long provider titles. */
+.sf-panel,
+.sf-chip,
+.sf-hero,
+.music-card-row,
+.mobile-mini-player-card {
+  overflow-wrap: anywhere;
+}
+
+/* Accessibility: don't remove keyboard visibility while polishing hover UI. */
+@media (hover: none) {
+  .control-button:hover,
+  .sf-primary-button:hover,
+  .sf-secondary-button:hover,
+  .sf-ghost-button:hover {
+    transform: none;
+  }
+}
