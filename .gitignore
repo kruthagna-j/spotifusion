@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Vite / tooling
+.vite/
+
+# Android/Gradle generated files
+**/.gradle/
+**/build/
+**/local.properties
+**/.cxx/
+**/*.iml
