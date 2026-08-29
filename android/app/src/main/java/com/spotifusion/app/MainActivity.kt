@@ -1,3 +1,3 @@
 package com.spotifusion.app
 
-class MainActivity : ReferenceActivity()
+class MainActivity : NeonActivity()
