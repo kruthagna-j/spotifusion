@@ -1,5 +1,6 @@
 import { Link, useLocation, Navigate } from 'react-router-dom'
 import { Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
@@ -22,6 +23,7 @@ import Account from '@/pages/Account'
 import { useAuth } from '@/context/AuthContext'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { warmMusicService } from '@/lib/musicApi'
 
 export default function App() {
   useKeyboardShortcuts()
@@ -31,15 +33,31 @@ export default function App() {
 
   const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
 
+  useEffect(() => {
+    if (!user || !online || standalone) return
+    let cancelled = false
+    const warm = () => { if (!cancelled && navigator.onLine) warmMusicService() }
+    warm()
+    const timer = window.setInterval(warm, 4 * 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') warm() }
+    const onOnline = () => warm()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onOnline)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [user, online, standalone])
+
   if (authLoading) {
     return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
   }
 
-  // Spotifusion starts at the dedicated login screen. There is no guest bypass.
   if (!user && !standalone) return <Navigate to="/login" replace />
   if (!user && location.pathname === '/onboarding') return <Navigate to="/login" replace />
 
-  // A newly signed-in account must complete preferences before the main app.
   if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
