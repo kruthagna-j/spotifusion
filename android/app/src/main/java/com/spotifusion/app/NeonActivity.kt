@@ -19,7 +19,7 @@ open class NeonActivity : AppCompatActivity() {
     private var currentTab = 0
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density + .5f).toInt()
-    private fun color(a: Int, r: Int, g: Int, b: Int) = Color.argb(a, r, g, b)
+    private fun alpha(c: Int, a: Int) = Color.argb(a, Color.red(c), Color.green(c), Color.blue(c))
     private fun rounded(c: Int, radius: Int = 18) = GradientDrawable().apply {
         setColor(c)
         cornerRadius = dp(radius).toFloat()
@@ -59,8 +59,7 @@ open class NeonActivity : AppCompatActivity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER
         setPadding(dp(8), dp(6), dp(8), dp(8))
-        background = rounded(color(220, 255, 255, 255), 22)
-
+        background = rounded(alpha(white, 220), 22)
         val items = arrayOf("⌂" to "Home", "⌕" to "Search", "♫" to "Library", "≋" to "Equalizer", "⚙" to "Settings")
         items.forEachIndexed { i, item ->
             val selected = i == currentTab
@@ -68,7 +67,7 @@ open class NeonActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 setPadding(dp(5), dp(5), dp(5), dp(4))
-                if (selected) background = rounded(color(28, 37, 99, 235), 16)
+                if (selected) background = rounded(alpha(blue, 28), 16)
                 setOnClickListener {
                     currentTab = i
                     when (i) {
@@ -92,14 +91,12 @@ open class NeonActivity : AppCompatActivity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(10), dp(8), dp(8), dp(8))
-        background = rounded(color(235, 255, 255, 255), 20)
-
+        background = rounded(alpha(white, 235), 20)
         val art = FrameLayout(this@NeonActivity).apply {
             background = rounded(blue, 14)
             addView(text("◉", 25f, white, true).apply { gravity = Gravity.CENTER })
         }
         addView(art, LinearLayout.LayoutParams(dp(50), dp(50)))
-
         val info = LinearLayout(this@NeonActivity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
@@ -109,16 +106,10 @@ open class NeonActivity : AppCompatActivity() {
         info.addView(text("Nothing playing", 14f, ink, true))
         info.addView(text("Choose a track to start", 11f, muted))
         addView(info, LinearLayout.LayoutParams(0, -1, 1f))
-
         addView(text("▶", 22f, blue, true).apply {
             gravity = Gravity.CENTER
             setOnClickListener { nowPlaying() }
         }, LinearLayout.LayoutParams(dp(44), dp(50)))
-    }
-
-    private fun page() = ScrollView(this).apply {
-        isVerticalScrollBarEnabled = false
-        setPadding(0, 0, 0, dp(8))
     }
 
     private fun column() = LinearLayout(this).apply {
@@ -144,11 +135,11 @@ open class NeonActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = rounded(color(215, 255, 255, 255), 18)
+            background = rounded(alpha(white, 215), 18)
             if (click != null) setOnClickListener { click() }
         }
         val iconBox = FrameLayout(this).apply {
-            background = rounded(color(32, accent.red, accent.green, accent.blue), 14)
+            background = rounded(alpha(accent, 32), 14)
             addView(text(icon, 22f, accent, true).apply { gravity = Gravity.CENTER })
         }
         card.addView(iconBox, LinearLayout.LayoutParams(dp(48), dp(48)))
@@ -169,9 +160,9 @@ open class NeonActivity : AppCompatActivity() {
             setPadding(dp(20), dp(22), dp(20), dp(20))
             background = rounded(blue, 24)
         }
-        h.addView(text("FEATURED GLASS SESSION", 10f, color(230,255,255,255), true))
+        h.addView(text("FEATURED GLASS SESSION", 10f, alpha(white, 230), true))
         h.addView(text("Nordic Resonance", 27f, white, true).apply { setPadding(0, dp(8), 0, 0) })
-        h.addView(text("Immersive frequencies and frosted vinyl tones.", 12f, color(220,225,235,255)).apply { setPadding(0, dp(5), 0, dp(16)) })
+        h.addView(text("Immersive frequencies and frosted vinyl tones.", 12f, alpha(white, 220)).apply { setPadding(0, dp(5), 0, dp(16)) })
         h.addView(text("  ▶   LISTEN NOW  ", 12f, blue, true).apply {
             gravity = Gravity.CENTER
             background = rounded(white, 18)
@@ -204,12 +195,12 @@ open class NeonActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), 0, dp(14), 0)
-            background = rounded(color(220,255,255,255), 20)
+            background = rounded(alpha(white, 220), 20)
         }
         searchBox.addView(text("⌕", 25f, muted, true))
         searchBox.addView(EditText(this).apply {
             hint = "Search your music"
-            hintTextColor = muted
+            setHintTextColor(muted)
             setTextColor(ink)
             textSize = 14f
             setSingleLine(true)
@@ -219,11 +210,10 @@ open class NeonActivity : AppCompatActivity() {
         c.addView(searchBox, LinearLayout.LayoutParams(-1, dp(54)).apply { bottomMargin = dp(18) })
         c.addView(text("RECENT SEARCHES", 11f, muted, true).apply { setPadding(0, 0, 0, dp(10)) })
         arrayOf("Gramophone Acoustics", "Nordic Synth", "Astral Pulse", "5-Band Preset").forEach {
-            val chip = text("  $it  ", 12f, ink, true).apply {
-                background = rounded(color(220,255,255,255), 16)
+            c.addView(text("  $it  ", 12f, ink, true).apply {
+                background = rounded(alpha(white, 220), 16)
                 setPadding(dp(5), dp(10), dp(5), dp(10))
-            }
-            c.addView(chip, LinearLayout.LayoutParams(-2, dp(38)).apply { bottomMargin = dp(8) })
+            }, LinearLayout.LayoutParams(-2, dp(38)).apply { bottomMargin = dp(8) })
         }
         c.addView(text("BROWSE", 11f, muted, true).apply { setPadding(0, dp(14), 0, dp(10)) })
         glassCard(c, "Songs", "Search individual tracks", "♪", blue)
@@ -255,7 +245,7 @@ open class NeonActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(18), dp(14), dp(18))
-            background = rounded(color(215,255,255,255), 20)
+            background = rounded(alpha(white, 215), 20)
         }
         arrayOf("60", "230", "910", "3.6k", "14k").forEach { freq ->
             val band = LinearLayout(this).apply {
@@ -284,7 +274,7 @@ open class NeonActivity : AppCompatActivity() {
         glassCard(c, "Shake to Change", "Change track by shaking your phone", "↯", Color.rgb(99,102,241))
         glassCard(c, "Storage", "Offline songs and cached artwork", "▣", Color.rgb(245,158,11))
         glassCard(c, "Account", "Profile and connected services", "◎", blue)
-        glassCard(c, "About Spotifusion", "Version 1.0", "ⓘ", Color.rgb(113,113,122))
+        glassCard(c, "About Spotifusion", "Version 1.0", "ⓘ", muted)
         show(c)
     }
 
@@ -298,7 +288,6 @@ open class NeonActivity : AppCompatActivity() {
         root.addView(text("NOW PLAYING", 11f, muted, true))
         root.addView(text("Glass Architecture", 23f, ink, true).apply { setPadding(0, dp(10), 0, 0) })
         root.addView(text("Astral Pulse · Nordic Studio Sessions", 12f, muted).apply { setPadding(0, dp(4), 0, dp(18)) })
-
         val record = FrameLayout(this).apply {
             background = rounded(Color.rgb(24,24,27), 200)
             elevation = dp(8).toFloat()
@@ -306,14 +295,12 @@ open class NeonActivity : AppCompatActivity() {
             addView(text("•", 22f, blue, true).apply { gravity = Gravity.CENTER })
         }
         root.addView(record, LinearLayout.LayoutParams(dp(290), dp(290)).apply { bottomMargin = dp(24) })
-
         root.addView(SeekBar(this).apply { max = 100; progress = 42 }, LinearLayout.LayoutParams(-1, dp(36)))
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(text("1:28", 10f, muted), LinearLayout.LayoutParams(0, -1, 1f))
             addView(text("3:45", 10f, muted).apply { gravity = Gravity.RIGHT })
         }, LinearLayout.LayoutParams(-1, dp(24)))
-
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -337,7 +324,8 @@ open class NeonActivity : AppCompatActivity() {
 
     private fun show(c: LinearLayout) {
         content.removeAllViews()
-        val scroll = page()
+        val scroll = ScrollView(this)
+        scroll.isVerticalScrollBarEnabled = false
         scroll.addView(c)
         content.addView(scroll)
     }
