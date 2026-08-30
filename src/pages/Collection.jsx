@@ -23,6 +23,7 @@ export default function Collection({ type }) {
   const { user } = useAuth()
   const player = usePlayer()
   const state = location.state || {}
+  const entityId = state.browseId || value
   const [tracks, setTracks] = useState(Array.isArray(state.tracks) ? state.tracks : [])
   const [title, setTitle] = useState(state.name || '')
   const [artwork, setArtwork] = useState(state.artwork || null)
@@ -35,10 +36,18 @@ export default function Collection({ type }) {
 
   useEffect(() => {
     let cancelled = false
-    const id = state.browseId || value
-    if (!user || !id) { setLoading(false); return () => { cancelled = true } }
-    setLoading(true); setError(null)
-    const loader = type === 'artist' ? getArtist(id) : getAlbum(id)
+    if (!user || !entityId) { setLoading(false); return () => { cancelled = true } }
+    setLoading(true)
+    setError(null)
+    setTracks(Array.isArray(state.tracks) ? state.tracks : [])
+    setTitle(state.name || '')
+    setArtwork(state.artwork || null)
+    setDescription('')
+    setAlbums([])
+    setSingles([])
+    setArtworkFailed(false)
+
+    const loader = type === 'artist' ? getArtist(entityId) : getAlbum(entityId)
     loader.then((payload) => {
       if (cancelled) return
       if (!payload) throw new Error(`Unable to load this ${type}.`)
@@ -47,7 +56,6 @@ export default function Collection({ type }) {
       setTitle(payload.name || state.name || (type === 'artist' ? 'Artist' : 'Album'))
       setDescription(payload.description || '')
       setArtwork(getArtwork(payload, 'large') || state.artwork || null)
-      setArtworkFailed(false)
       if (type === 'artist') {
         setAlbums(Array.isArray(payload.albums) ? payload.albums : [])
         setSingles(Array.isArray(payload.singles) ? payload.singles : [])
@@ -55,8 +63,7 @@ export default function Collection({ type }) {
     }).catch((e) => { if (!cancelled) setError(e?.message || `Unable to load this ${type}.`) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, value, type])
+  }, [user, entityId, type, location.key])
 
   const heading = title || (type === 'artist' ? 'Artist' : 'Album')
   const uniqueTracks = useMemo(() => { const seen = new Set(); return tracks.filter((x) => x?.id && !seen.has(x.id) && seen.add(x.id)) }, [tracks])
