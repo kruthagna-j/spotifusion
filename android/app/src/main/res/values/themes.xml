@@ -1,8 +1,13 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Spotifusion" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+<resources>
+    <style name="Base.Theme.Spotifusion" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F4F4F5</item>
+        <item name="android:navigationBarColor">#F4F4F5</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorAccent">#2563EB</item>
+        <item name="colorPrimary">#2563EB</item>
+        <item name="colorSecondary">#6366F1</item>
     </style>
 
     <style name="Theme.Spotifusion" parent="Base.Theme.Spotifusion" />
