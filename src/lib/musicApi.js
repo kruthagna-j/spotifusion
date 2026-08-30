@@ -2,7 +2,7 @@ import { auth } from '@/lib/firebase'
 
 const CONFIGURED_API_BASE = (import.meta.env.VITE_MUSIC_API_URL || '').replace(/\/$/, '')
 const SAME_ORIGIN_API_BASE = typeof window !== 'undefined' ? window.location.origin : ''
-const API_BASES = [...new Set([CONFIGURED_API_BASE, SAME_ORIGIN_API_BASE].filter(Boolean))]
+const API_BASES = CONFIGURED_API_BASE ? [CONFIGURED_API_BASE] : [SAME_ORIGIN_API_BASE].filter(Boolean)
 if (import.meta.env.PROD && !CONFIGURED_API_BASE) console.warn('[Spotifusion] VITE_MUSIC_API_URL is not set; using same-origin API fallback.')
 
 async function parseJsonSafe(res) { try { return await res.json() } catch { return null } }
