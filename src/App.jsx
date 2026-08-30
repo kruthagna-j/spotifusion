@@ -6,7 +6,7 @@ import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
 import MobileNav from '@/components/MobileNav'
 import Home from '@/pages/Home'
-import Search from '@/pages/SearchFixed'
+import Search from '@/pages/SearchStable2'
 import LibraryMobile from '@/pages/LibraryMobile'
 import LikedSongs from '@/pages/LikedSongs'
 import Playlist from '@/pages/Playlist'
@@ -51,17 +51,10 @@ export default function App() {
     }
   }, [user, online, standalone])
 
-  if (authLoading) {
-    return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
-  }
-
+  if (authLoading) return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
   if (!user && !standalone) return <Navigate to="/login" replace />
   if (!user && location.pathname === '/onboarding') return <Navigate to="/login" replace />
-
-  if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace />
-  }
-
+  if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
   if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /></Routes>
 
   return <div className="h-screen flex flex-col bg-bg text-text overflow-hidden">
