@@ -1,9 +1,13 @@
 import { auth } from '@/lib/firebase'
 
+// The Python/FastAPI service is hosted on Render. Keep the deployed app
+// functional even when Vercel's VITE_MUSIC_API_URL variable is missing, while
+// still allowing an explicitly configured API URL to take precedence.
 const CONFIGURED_API_BASE = (import.meta.env.VITE_MUSIC_API_URL || '').replace(/\/$/, '')
+const DEFAULT_API_BASE = 'https://spotifusion.onrender.com'
 const SAME_ORIGIN_API_BASE = typeof window !== 'undefined' ? window.location.origin : ''
-const API_BASES = CONFIGURED_API_BASE ? [CONFIGURED_API_BASE] : [SAME_ORIGIN_API_BASE].filter(Boolean)
-if (import.meta.env.PROD && !CONFIGURED_API_BASE) console.warn('[Spotifusion] VITE_MUSIC_API_URL is not set; using same-origin API fallback.')
+const API_BASES = [...new Set([CONFIGURED_API_BASE, DEFAULT_API_BASE].filter(Boolean))]
+if (import.meta.env.PROD && !CONFIGURED_API_BASE) console.warn('[Spotifusion] VITE_MUSIC_API_URL is not set; using the default Render music API.')
 
 async function parseJsonSafe(res) { try { return await res.json() } catch { return null } }
 async function authHeaders(forceRefresh = false) {
@@ -19,7 +23,10 @@ const MAX_SEARCH_CACHE = 128
 const MAX_ENTITY_CACHE = 256
 const MAX_DISCOVER_CACHE = 8
 const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504])
-const REQUEST_TIMEOUT_MS = 20000
+// Render can cold-start the API. A 20s timeout can fail the first request and
+// make the user think a refresh is required. Give the service enough time to
+// wake up, while retaining the retry logic below for genuine failures.
+const REQUEST_TIMEOUT_MS = 60000
 
 const searchCache = new Map()
 const songCache = new Map()
@@ -198,7 +205,7 @@ export async function warmMusicService() {
   if (!API_BASES.length) return false
   for (const base of API_BASES) {
     try {
-      const response = await fetchWithTimeout(`${base}/health`, { cache: 'no-store' }, 10000)
+      const response = await fetchWithTimeout(`${base}/health`, { cache: 'no-store' }, 45000)
       if (response.ok) return true
     } catch {}
   }
