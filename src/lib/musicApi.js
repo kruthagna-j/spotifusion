@@ -27,18 +27,66 @@ async function request(path,{signal}={}){if(!API_BASES.length)throw new Error('M
 
 export async function searchMusic(query,{signal}={}){const q=query.trim();if(q.length<2)return[];if(!auth.currentUser)throw new Error('Sign in to search and stream music.');const key=normalizedKey(q);const cached=getCached(searchCache,key,SEARCH_CACHE_TTL);if(cached)return cached;const body=await coalesce(`search:${key}`,()=>request(`/api/search?q=${encodeURIComponent(q)}`,{signal}));if(!body||!Array.isArray(body.results))throw new Error('Unable to search right now. Please try again.');setCached(searchCache,key,body.results,MAX_SEARCH_CACHE);return body.results}
 
-const CATEGORY_TYPES={songs:new Set(['song']),albums:new Set(['album']),artists:new Set(['artist']),playlists:new Set(['playlist','jukebox','mix']),jukebox:new Set(['jukebox','mix'])}
-function filterCategoryResults(results,category){if(category==='all')return results;const allowed=CATEGORY_TYPES[category];return allowed?results.filter(x=>allowed.has(x?.resultType)):results}
+const CATEGORY_TYPES={songs:new Set(['song','video']),albums:new Set(['album']),artists:new Set(['artist']),playlists:new Set(['playlist','jukebox','mix']),jukebox:new Set(['jukebox','mix'])}
+function filterCategoryResults(results,category){
+  if(category==='all')return results
+  const allowed=CATEGORY_TYPES[category]
+  if(!allowed)return results
+  return results.filter(x=>allowed.has(String(x?.resultType||x?.type||'').toLowerCase()))
+}
 
-export async function searchMusicPage(query,{category='all',batch=1,signal}={}){const q=query.trim();if(q.length<2)return{results:[],hasMore:false,batch,category};if(!auth.currentUser)throw new Error('Sign in to search and stream music.');const cacheKey=`page:${category}:${batch}:${normalizedKey(q)}`;const cached=getCached(searchCache,cacheKey,SEARCH_CACHE_TTL);if(cached)return cached;let body=await coalesce(`search-page:${cacheKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&batch=${batch}`,{signal}));let results=Array.isArray(body?.results)?body.results:[];
-  // Some ytmusicapi versions return an empty filtered page for entity categories even though the mixed search contains those entities. Fall back to the mixed endpoint and filter client-side so switching tabs never requires a refresh.
-  if(!results.length&&category!=='all'&&category!=='songs'){
+function normalizeCategoryResults(results,category){
+  if(!Array.isArray(results))return []
+  return results.map(item=>{
+    if(!item||typeof item!=='object')return null
+    const existing=String(item.resultType||item.type||'').toLowerCase()
+    if(category==='songs' && (existing==='song'||existing==='video'||!existing)) return {...item,resultType:'song'}
+    if(category==='albums' && (existing==='album'||!existing)) return {...item,resultType:'album'}
+    if(category==='artists' && (existing==='artist'||!existing)) return {...item,resultType:'artist'}
+    if(category==='playlists' && (existing==='playlist'||existing==='jukebox'||existing==='mix'||!existing)) return {...item,resultType:existing==='jukebox'||existing==='mix'?'jukebox':'playlist'}
+    if(category==='jukebox' && (existing==='jukebox'||existing==='mix')) return {...item,resultType:'jukebox'}
+    return item
+  }).filter(item=>item&&item.id)
+}
+
+export async function searchMusicPage(query,{category='all',batch=1,signal}={}){
+  const q=query.trim()
+  if(q.length<2)return{results:[],hasMore:false,batch,category}
+  if(!auth.currentUser)throw new Error('Sign in to search and stream music.')
+
+  const cacheKey=`page:${category}:${batch}:${normalizedKey(q)}`
+  const cached=getCached(searchCache,cacheKey,SEARCH_CACHE_TTL)
+  // Never treat a previously cached empty category page as a successful result.
+  // Older deployments could cache an empty filtered response and make the tab
+  // appear blank until the browser was refreshed.
+  if(cached && Array.isArray(cached.results) && cached.results.length)return cached
+
+  let body=await coalesce(`search-page:${cacheKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&batch=${batch}`,{signal}))
+  let results=normalizeCategoryResults(Array.isArray(body?.results)?body.results:[],category)
+
+  // Category-specific YTMusic searches can legitimately return an empty page
+  // while the mixed search for the exact same query contains matching items.
+  // Always fall back to the mixed endpoint, including SONGS. This is what makes
+  // switching tabs work immediately without a browser refresh.
+  if(!results.length&&category!=='all'){
     const fallbackKey=`page:all:${batch}:${normalizedKey(q)}`
     const fallback=await coalesce(`search-page:${fallbackKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=all&batch=${batch}`,{signal}))
-    results=filterCategoryResults(Array.isArray(fallback?.results)?fallback.results:[],category)
+    const mixed=Array.isArray(fallback?.results)?fallback.results:[]
+    results=filterCategoryResults(mixed,category)
+    // If the provider's mixed response omitted resultType, songs are still
+    // valid playable results. Treat playable video-shaped items as songs.
+    if(category==='songs' && !results.length){
+      results=mixed.filter(x=>x?.id||x?.videoId).map(x=>({...x,resultType:'song',id:x.id||x.videoId}))
+    }
     body={...fallback,category}
   }
-  const result={results,hasMore:Boolean(body?.hasMore),available:Number.isFinite(body?.available)?body.available:undefined,batch:Number(body?.batch||batch),pageSize:Number(body?.pageSize||100),category};setCached(searchCache,cacheKey,result,MAX_SEARCH_CACHE);return result}
+
+  const result={results,hasMore:Boolean(body?.hasMore)&&results.length>0,available:Number.isFinite(body?.available)?body.available:results.length,batch:Number(body?.batch||batch),pageSize:Number(body?.pageSize||100),category}
+  // Empty pages are deliberately not cached; a temporary upstream empty page
+  // must not poison the category until TTL expiry.
+  if(results.length)setCached(searchCache,cacheKey,result,MAX_SEARCH_CACHE)
+  return result
+}
 
 export async function getArtist(artistId){if(!artistId||!auth.currentUser)return null;const key=`artist:${artistId}`;const cached=getCached(songCache,key,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(key,()=>request(`/api/artist/${encodeURIComponent(artistId)}`));if(body)setCached(songCache,key,body,MAX_ENTITY_CACHE);return body}
 export async function getAlbum(albumId){if(!albumId||!auth.currentUser)return null;const key=`album:${albumId}`;const cached=getCached(songCache,key,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(key,()=>request(`/api/album/${encodeURIComponent(albumId)}`));if(body)setCached(songCache,key,body,MAX_ENTITY_CACHE);return body}
