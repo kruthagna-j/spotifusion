@@ -1,13 +1,15 @@
 import { auth } from '@/lib/firebase'
 
-const API_BASE = (import.meta.env.VITE_MUSIC_API_URL || '').replace(/\/$/, '')
-if (import.meta.env.PROD && !API_BASE) console.error('[Spotifusion] VITE_MUSIC_API_URL is not set in this production build.')
+const CONFIGURED_API_BASE = (import.meta.env.VITE_MUSIC_API_URL || '').replace(/\/$/, '')
+const SAME_ORIGIN_API_BASE = typeof window !== 'undefined' ? window.location.origin : ''
+const API_BASES = [...new Set([CONFIGURED_API_BASE, SAME_ORIGIN_API_BASE].filter(Boolean))]
+if (import.meta.env.PROD && !CONFIGURED_API_BASE) console.warn('[Spotifusion] VITE_MUSIC_API_URL is not set; using same-origin API fallback.')
 
 async function parseJsonSafe(res) { try { return await res.json() } catch { return null } }
-async function authHeaders() {
+async function authHeaders(forceRefresh = false) {
   const user = auth.currentUser
   if (!user) return {}
-  return { Authorization: `Bearer ${await user.getIdToken()}` }
+  return { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` }
 }
 
 const SEARCH_CACHE_TTL = 10 * 60 * 1000
@@ -16,6 +18,7 @@ const DISCOVER_CACHE_TTL = 15 * 60 * 1000
 const MAX_SEARCH_CACHE = 128
 const MAX_ENTITY_CACHE = 256
 const MAX_DISCOVER_CACHE = 8
+const TRANSIENT_STATUS = new Set([429, 502, 503, 504])
 
 const searchCache = new Map()
 const songCache = new Map()
@@ -32,8 +35,7 @@ function getCached(map, key, ttl) {
   return e.value
 }
 function setCached(map, key, value, max) {
-  map.delete(key)
-  map.set(key, { time: Date.now(), value })
+  map.delete(key); map.set(key, { time: Date.now(), value })
   while (map.size > max) map.delete(map.keys().next().value)
 }
 function coalesce(key, loader) {
@@ -43,19 +45,39 @@ function coalesce(key, loader) {
   inflight.set(key, promise)
   return promise
 }
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 async function request(path, { signal } = {}) {
-  if (!API_BASE) throw new Error('Music service is not configured.')
-  let res
-  try {
-    res = await fetch(`${API_BASE}${path}`, { headers: await authHeaders(), signal })
-  } catch (err) {
-    if (err?.name === 'AbortError') throw err
-    throw new Error('Unable to reach the music service right now. Please try again.')
+  if (!API_BASES.length) throw new Error('Music service is not configured.')
+  let lastError = null
+  let refreshedToken = false
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    for (const base of API_BASES) {
+      try {
+        const response = await fetch(`${base}${path}`, {
+          headers: await authHeaders(refreshedToken),
+          signal,
+          cache: 'no-store',
+        })
+        const body = await parseJsonSafe(response)
+        if (response.ok) return body
+
+        if (response.status === 401 && !refreshedToken && auth.currentUser) {
+          refreshedToken = true
+          break
+        }
+        lastError = new Error(body?.detail || `Music service request failed (${response.status}).`)
+        if (!TRANSIENT_STATUS.has(response.status)) throw lastError
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err
+        lastError = err
+      }
+    }
+    if (refreshedToken && attempt === 0) continue
+    if (attempt < 3) await sleep(400 * 2 ** attempt)
   }
-  const body = await parseJsonSafe(res)
-  if (!res.ok) throw new Error(body?.detail || 'Music service request failed.')
-  return body
+  throw lastError || new Error('Unable to reach the music service right now. Please try again.')
 }
 
 export async function searchMusic(query, { signal } = {}) {
@@ -70,7 +92,6 @@ export async function searchMusic(query, { signal } = {}) {
   setCached(searchCache, key, body.results, MAX_SEARCH_CACHE)
   return body.results
 }
-
 
 export async function getArtist(artistId) {
   if (!artistId || !auth.currentUser) return null
@@ -131,4 +152,15 @@ export async function getDiscover({ signal } = {}) {
   const result = body || { sections: [] }
   setCached(discoverCache, key, result, MAX_DISCOVER_CACHE)
   return result
+}
+
+export async function warmMusicService() {
+  if (!API_BASES.length) return false
+  for (const base of API_BASES) {
+    try {
+      const response = await fetch(`${base}/health`, { cache: 'no-store' })
+      if (response.ok) return true
+    } catch {}
+  }
+  return false
 }
