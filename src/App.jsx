@@ -19,44 +19,32 @@ import NowPlayingRoute from '@/pages/NowPlayingRoute'
 import Login from '@/pages/Login'
 import Onboarding from '@/pages/Onboarding'
 import Account from '@/pages/Account'
-import SpotifyCallback from '@/pages/SpotifyCallback'
-import SpotifyConnect from '@/pages/SpotifyConnect'
 import { useAuth } from '@/context/AuthContext'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-
-function isMobileClient() {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia?.('(max-width: 767px)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-}
 
 export default function App() {
   useKeyboardShortcuts()
   const online = useOnlineStatus()
   const location = useLocation()
   const { user, profile, authLoading } = useAuth()
-  const mobileClient = isMobileClient()
 
-  const standalone = location.pathname === '/login' || location.pathname === '/onboarding' || location.pathname === '/spotify-callback'
+  const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
 
   if (authLoading) {
     return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
   }
 
+  // Spotifusion starts at the dedicated login screen. There is no guest bypass.
   if (!user && !standalone) return <Navigate to="/login" replace />
   if (!user && location.pathname === '/onboarding') return <Navigate to="/login" replace />
 
-  // Language + artist onboarding is intentionally a mobile-app-only experience.
-  // Desktop/web users go straight to the player after Firebase login.
-  if (user && mobileClient && !profile?.onboardingComplete && location.pathname !== '/onboarding') {
+  // A newly signed-in account must complete preferences before the main app.
+  if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
-  if (user && !mobileClient && location.pathname === '/onboarding') {
-    return <Navigate to="/" replace />
-  }
 
-  if (location.pathname === '/spotify-callback') return <SpotifyCallback />
-  if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /><Route path="/spotify-callback" element={<SpotifyCallback />} /></Routes>
+  if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /></Routes>
 
   return <div className="h-screen flex flex-col bg-bg text-text overflow-hidden">
     {!online && <div className="shrink-0 bg-yellow-600/90 text-black text-xs font-semibold text-center py-1.5 px-4">You're offline. Your downloaded/local songs are still available — online search and streaming need a connection.</div>}
@@ -64,7 +52,6 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/account" element={<Account />} />
-        <Route path="/spotify-connect" element={<SpotifyConnect />} />
         <Route path="/search" element={<Search />} />
         <Route path="/library" element={<LibraryMobile />} />
         <Route path="/liked-songs" element={<LikedSongs />} />
