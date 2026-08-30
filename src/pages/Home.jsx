@@ -13,13 +13,34 @@ function TrackCard({ track, tracks, player }) { return <button onClick={() => pl
 function Quick({to,icon:Icon,title,text}) { return <Link to={to} className="sf-panel p-4 md:p-5 group hover:bg-white/[.07] transition min-w-0"><div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-brand/15 text-brand grid place-items-center mb-3"><Icon size={20}/></div><h3 className="font-black truncate">{title}</h3><p className="text-xs text-text-muted mt-1 line-clamp-2">{text}</p><ArrowRight size={15} className="mt-4 text-text-subdued"/></Link> }
 function MusicSection({section,player}) { const tracks=section?.tracks||[]; if(!tracks.length)return null; return <section className="min-w-0"><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-brand uppercase tracking-widest font-black">{section.label||'Music'}</p><h2 className="text-xl md:text-2xl font-black mt-1">{section.title}</h2>{section.subtitle&&<p className="text-xs text-text-subdued mt-1">{section.subtitle}</p>}</div><Link to="/discover" className="text-sm font-bold text-text-muted">See all</Link></div><div className="music-card-row">{tracks.map(t=><TrackCard key={`${section.id}-${t.id}`} track={t} tracks={tracks} player={player}/>)}</div></section> }
 
+async function retryDiscover(attempts = 3) {
+  let lastError
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const data = await getDiscover()
+      if (data?.sections?.length) return data
+      lastError = new Error('Discovery returned no sections.')
+    } catch (error) {
+      lastError = error
+    }
+    if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)))
+  }
+  throw lastError || new Error('Discovery is unavailable.')
+}
+
 export default function Home() {
   const {user,profile,signIn}=useAuth(); const player=usePlayer()
   const {data:recent=[],loading:recentLoading}=useRecentlyPlayedStatus(user?.uid,12)
   const {data:playlists=[]}=usePlaylistsStatus(user?.uid); const {data:liked=[]}=useLikedSongsStatus(user?.uid); const [localSongs]=useLocalSongs()
   const [discover,setDiscover]=useState({sections:[]}); const [discoverLoading,setDiscoverLoading]=useState(false); const [recommended,setRecommended]=useState([])
 
-  useEffect(()=>{ if(!user||!navigator.onLine)return; let cancelled=false; setDiscoverLoading(true); getDiscover().then(v=>{if(!cancelled)setDiscover(v||{sections:[]})}).catch(()=>{}).finally(()=>{if(!cancelled)setDiscoverLoading(false)}); return()=>{cancelled=true} },[user])
+  useEffect(()=>{
+    if(!user||!navigator.onLine)return
+    let cancelled=false
+    setDiscoverLoading(true)
+    retryDiscover(3).then(v=>{if(!cancelled)setDiscover(v||{sections:[]})}).catch(()=>{}).finally(()=>{if(!cancelled)setDiscoverLoading(false)})
+    return()=>{cancelled=true}
+  },[user,profile?.onboardingComplete])
 
   useEffect(()=>{
     if(!user||!navigator.onLine)return; let cancelled=false
