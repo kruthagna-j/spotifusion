@@ -18,7 +18,8 @@ const DISCOVER_CACHE_TTL = 15 * 60 * 1000
 const MAX_SEARCH_CACHE = 128
 const MAX_ENTITY_CACHE = 256
 const MAX_DISCOVER_CACHE = 8
-const TRANSIENT_STATUS = new Set([429, 502, 503, 504])
+const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504])
+const REQUEST_TIMEOUT_MS = 20000
 
 const searchCache = new Map()
 const songCache = new Map()
@@ -47,6 +48,25 @@ function coalesce(key, loader) {
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const sourceSignal = options.signal
+  if (sourceSignal?.aborted) throw new DOMException('Request aborted', 'AbortError')
+  const onAbort = () => controller.abort()
+  sourceSignal?.addEventListener('abort', onAbort, { once: true })
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (err) {
+    if (sourceSignal?.aborted) throw new DOMException('Request aborted', 'AbortError')
+    if (controller.signal.aborted) throw new Error('Music service request timed out.')
+    throw err
+  } finally {
+    window.clearTimeout(timer)
+    sourceSignal?.removeEventListener('abort', onAbort)
+  }
+}
+
 async function request(path, { signal } = {}) {
   if (!API_BASES.length) throw new Error('Music service is not configured.')
   let lastError = null
@@ -55,7 +75,7 @@ async function request(path, { signal } = {}) {
   for (let attempt = 0; attempt < 4; attempt++) {
     for (const base of API_BASES) {
       try {
-        const response = await fetch(`${base}${path}`, {
+        const response = await fetchWithTimeout(`${base}${path}`, {
           headers: await authHeaders(refreshedToken),
           signal,
           cache: 'no-store',
@@ -75,7 +95,7 @@ async function request(path, { signal } = {}) {
       }
     }
     if (refreshedToken && attempt === 0) continue
-    if (attempt < 3) await sleep(400 * 2 ** attempt)
+    if (attempt < 3) await sleep(500 * 2 ** attempt)
   }
   throw lastError || new Error('Unable to reach the music service right now. Please try again.')
 }
@@ -91,6 +111,26 @@ export async function searchMusic(query, { signal } = {}) {
   if (!body || !Array.isArray(body.results)) throw new Error('Unable to search right now. Please try again.')
   setCached(searchCache, key, body.results, MAX_SEARCH_CACHE)
   return body.results
+}
+
+export async function searchMusicPage(query, { category = 'all', batch = 1, signal } = {}) {
+  const q = query.trim()
+  if (q.length < 2) return { results: [], hasMore: false, batch, category }
+  if (!auth.currentUser) throw new Error('Sign in to search and stream music.')
+  const cacheKey = `page:${category}:${batch}:${normalizedKey(q)}`
+  const cached = getCached(searchCache, cacheKey, SEARCH_CACHE_TTL)
+  if (cached) return cached
+  const body = await coalesce(`search-page:${cacheKey}`, () => request(`/api/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&batch=${batch}`, { signal }))
+  const result = {
+    results: Array.isArray(body?.results) ? body.results : [],
+    hasMore: Boolean(body?.hasMore),
+    available: Number.isFinite(body?.available) ? body.available : undefined,
+    batch: Number(body?.batch || batch),
+    pageSize: Number(body?.pageSize || 100),
+    category,
+  }
+  setCached(searchCache, cacheKey, result, MAX_SEARCH_CACHE)
+  return result
 }
 
 export async function getArtist(artistId) {
@@ -158,7 +198,7 @@ export async function warmMusicService() {
   if (!API_BASES.length) return false
   for (const base of API_BASES) {
     try {
-      const response = await fetch(`${base}/health`, { cache: 'no-store' })
+      const response = await fetchWithTimeout(`${base}/health`, { cache: 'no-store' }, 10000)
       if (response.ok) return true
     } catch {}
   }
