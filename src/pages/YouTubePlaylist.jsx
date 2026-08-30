@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Play, Shuffle, ListMusic } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getPlaylist } from '@/lib/musicApi'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
 import TrackRow from '@/components/TrackRow'
 import { getArtwork } from '@/lib/artwork'
+
+function looksLikeVideoId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{11}$/.test(value)
+}
 
 export default function YouTubePlaylist() {
   const { id } = useParams()
@@ -21,7 +25,18 @@ export default function YouTubePlaylist() {
   useEffect(() => {
     if (!user) { setLoading(false); return }
     let cancelled = false
+
+    // A YouTube video ID is 11 characters. It is not a playlist ID, so never
+    // send it to /api/playlist where ytmusicapi would return a 502. Some
+    // YouTube Music mix/search entities expose a video-shaped identifier.
+    if (looksLikeVideoId(id) && !state.tracks?.length) {
+      setLoading(false)
+      setError('This result is not an openable YouTube playlist.')
+      return () => { cancelled = true }
+    }
+
     setLoading(true)
+    setError(null)
     getPlaylist(id).then((payload) => {
       if (cancelled) return
       if (!payload) throw new Error('Unable to load this playlist.')
@@ -39,7 +54,7 @@ export default function YouTubePlaylist() {
 
   if (!user) return <div className="p-6 text-center"><h1 className="text-xl font-black">Sign in to open playlists</h1><button onClick={() => navigate('/search')} className="mt-5 bg-brand text-black font-bold px-5 py-2.5 rounded-full">Back to Search</button></div>
   if (loading) return <div className="p-5 md:p-7"><div className="sf-panel h-52 animate-pulse"/></div>
-  if (error) return <div className="p-5 md:p-7"><div className="sf-panel p-6 text-center text-red-300">{error}<div><Link to="/search" className="inline-flex mt-5 bg-brand text-black font-bold px-5 py-2.5 rounded-full">Back to Search</Link></div></div></div>
+  if (error) return <div className="p-5 md:p-7"><div className="sf-panel p-6 text-center text-text-muted">{error}<div><Link to="/search" className="inline-flex mt-5 bg-brand text-black font-bold px-5 py-2.5 rounded-full">Back to Search</Link></div></div></div>
 
   const tracks = data.tracks || []
   return <div className="p-4 md:p-7 max-w-6xl mx-auto min-w-0 overflow-x-hidden">
