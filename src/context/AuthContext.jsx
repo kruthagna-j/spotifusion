@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, signInWithGoogle, completeGoogleRedirect, signOut as fbSignOut, ensureUserProfile, getUserPreferences } from '@/lib/firebase'
+import { warmMusicService } from '@/lib/musicApi'
 
 const AuthContext = createContext(null)
 
@@ -12,15 +13,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let alive = true
-    // Complete an outstanding mobile redirect before waiting for the auth
-    // observer. Errors are surfaced through the login page instead of causing
-    // a blank/white application.
     completeGoogleRedirect().catch(() => null)
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!alive) return
       setUser(currentUser)
       if (currentUser) {
+        // Render can suspend the API while idle. Wake it as soon as Firebase
+        // authentication is known so the first search/discovery request does
+        // not depend on a browser refresh.
+        warmMusicService().catch(() => null)
         try {
           await ensureUserProfile(currentUser)
           const data = await getUserPreferences(currentUser.uid)
@@ -43,8 +45,6 @@ export const AuthProvider = ({ children }) => {
     try {
       return await signInWithGoogle()
     } finally {
-      // Popup resolves here. Redirect intentionally leaves the page and the
-      // next page load completes the Firebase redirect result.
       signInInFlight.current = false
     }
   }
