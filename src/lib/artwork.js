@@ -8,10 +8,12 @@ function upgradeYouTubeThumbnail(url, width = 1400, height = 1400) {
   if (!validUrl(url)) return null
   const clean = url.trim()
 
-  // YouTube video thumbnails: use the clean max-resolution endpoint.
+  // YouTube's maxresdefault is not available for every video and produces
+  // noisy 404s in production. hqdefault is broadly available and still gives
+  // a sharp thumbnail; the source CDN artwork is used for non-video images.
   const videoMatch = clean.match(/(?:i\.)?ytimg\.com\/vi\/([^/]+)\//i)
   if (videoMatch?.[1]) {
-    return `https://i.ytimg.com/vi/${videoMatch[1]}/maxresdefault.jpg`
+    return `https://i.ytimg.com/vi/${videoMatch[1]}/hqdefault.jpg`
   }
 
   // Google/YouTube image CDN: remove old resize descriptors and request a
