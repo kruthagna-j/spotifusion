@@ -33,7 +33,7 @@ export default function Login() {
       <div className="sf-login-brand"><span className="sf-login-logo"><Music2 size={26}/></span><span>Spotifusion</span></div>
       <p className="text-xs text-brand uppercase tracking-[.25em] font-black mt-10">Music without limits</p>
       <h1 className="text-4xl sm:text-5xl font-black mt-3 leading-tight">Your music.<br/><span className="text-brand">Your way.</span></h1>
-      <p className="text-sm text-text-muted mt-4 leading-6">Sign in first. Then choose your languages, favorite artists and local music preferences before entering Spotifusion.</p>
+      <p className="text-sm text-text-muted mt-4 leading-6">Sign in first. Then choose your languages and favorite artists before entering Spotifusion.</p>
       <button onClick={handleGoogle} disabled={busy} className="sf-login-google">
         <Globe size={19}/><span>{busy ? 'Connecting…' : 'Continue with Google'}</span><ArrowRight size={17} className="ml-auto"/>
       </button>
