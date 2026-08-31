@@ -2,331 +2,142 @@ package com.spotifusion.app
 
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
-import android.graphics.drawable.GradientDrawable
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 
 open class NeonActivity : AppCompatActivity() {
-    private val bg = Color.rgb(244, 244, 245)
-    private val ink = Color.rgb(24, 24, 27)
-    private val muted = Color.rgb(113, 113, 122)
-    private val blue = Color.rgb(37, 99, 235)
-    private val white = Color.WHITE
-    private lateinit var content: FrameLayout
+    private val background = Color.rgb(246, 247, 252)
+    private val surface = Color.rgb(255, 255, 255)
+    private val ink = Color.rgb(24, 24, 30)
+    private val muted = Color.rgb(111, 114, 128)
+    private val blue = Color.rgb(45, 91, 239)
+    private val indigo = Color.rgb(91, 73, 226)
+    private val cyan = Color.rgb(60, 178, 235)
+    private val pink = Color.rgb(222, 86, 171)
+    private val orange = Color.rgb(245, 157, 72)
+    private lateinit var page: FrameLayout
+    private lateinit var miniTitle: TextView
+    private lateinit var miniSubtitle: TextView
+    private lateinit var miniPlay: TextView
+    private lateinit var nav: LinearLayout
+    private lateinit var headerTitle: TextView
     private var currentTab = 0
+    private var playing = false
+    private var shuffle = false
+    private var repeat = false
+    private var currentSong = "Glass Architecture"
+    private var currentArtist = "Astral Pulse"
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density + .5f).toInt()
-    private fun alpha(c: Int, a: Int) = Color.argb(a, Color.red(c), Color.green(c), Color.blue(c))
-    private fun rounded(c: Int, radius: Int = 18) = GradientDrawable().apply {
-        setColor(c)
-        cornerRadius = dp(radius).toFloat()
-    }
-    private fun text(value: String, size: Float, c: Int = ink, bold: Boolean = false) = TextView(this).apply {
-        text = value
-        textSize = size
-        setTextColor(c)
-        includeFontPadding = false
-        if (bold) typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+    private fun alpha(color: Int, amount: Int): Int = Color.argb(amount, Color.red(color), Color.green(color), Color.blue(color))
+    private fun bg(color: Int, radius: Int = 20, stroke: Int? = null): GradientDrawable = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); stroke?.let { setStroke(dp(1), it) } }
+    private fun gradient(start: Int, end: Int, radius: Int = 22): GradientDrawable = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(start, end)).apply { cornerRadius = dp(radius).toFloat() }
+    private fun label(value: String, size: Float, color: Int = ink, bold: Boolean = false): TextView = TextView(this).apply { text = value; textSize = size; setTextColor(color); includeFontPadding = false; if (bold) typeface = Typeface.create("sans-serif", Typeface.BOLD) }
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        window.statusBarColor = bg
-        window.navigationBarColor = bg
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        window.statusBarColor = background
+        window.navigationBarColor = background
         buildShell()
-        home()
+        showHome()
     }
 
     private fun buildShell() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
-        }
-        content = FrameLayout(this)
-        content.setBackgroundColor(bg)
-        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(miniPlayer(), LinearLayout.LayoutParams(-1, dp(72)).apply {
-            setMargins(dp(12), 0, dp(12), dp(8))
-        })
-        root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(76)))
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(background); setPadding(dp(12), dp(8), dp(12), 0) }
+        root.addView(topBar(), LinearLayout.LayoutParams(-1, dp(58)))
+        page = FrameLayout(this)
+        root.addView(page, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(miniPlayer(), LinearLayout.LayoutParams(-1, dp(72)).apply { setMargins(dp(2), dp(7), dp(2), dp(7)) })
+        nav = bottomNavigation()
+        root.addView(nav, LinearLayout.LayoutParams(-1, dp(68)))
         setContentView(root)
     }
 
-    private fun bottomNav() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER
-        setPadding(dp(8), dp(6), dp(8), dp(8))
-        background = rounded(alpha(white, 220), 22)
-        val items = arrayOf("⌂" to "Home", "⌕" to "Search", "♫" to "Library", "≋" to "Equalizer", "⚙" to "Settings")
-        items.forEachIndexed { i, item ->
-            val selected = i == currentTab
-            val holder = LinearLayout(this@NeonActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(5), dp(5), dp(5), dp(4))
-                if (selected) background = rounded(alpha(blue, 28), 16)
-                setOnClickListener {
-                    currentTab = i
-                    when (i) {
-                        0 -> home()
-                        1 -> search()
-                        2 -> library()
-                        3 -> equalizer()
-                        else -> settings()
-                    }
-                }
-            }
-            holder.addView(text(item.first, 22f, if (selected) blue else muted, true))
-            holder.addView(text(item.second, 9f, if (selected) blue else muted, true).apply {
-                setPadding(0, dp(3), 0, 0)
-            })
-            addView(holder, LinearLayout.LayoutParams(0, -1, 1f))
+    private fun topBar(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, dp(2), 0)
+        val brand = LinearLayout(this@NeonActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val logo = FrameLayout(this@NeonActivity).apply { this.background = gradient(blue, indigo, 13); addView(label("◉", 18f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }
+        brand.addView(logo, LinearLayout.LayoutParams(dp(38), dp(38)))
+        headerTitle = label("Spotifusion", 18f, ink, true).apply { setPadding(dp(11), 0, 0, 0) }
+        brand.addView(headerTitle); addView(brand, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(label("⌕", 25f, ink, true).apply { gravity = Gravity.CENTER; this.background = bg(alpha(surface, 225), 17, alpha(Color.WHITE, 230)); setOnClickListener { showSearch() } }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(5) })
+        addView(label("♧", 22f, ink).apply { gravity = Gravity.CENTER; this.background = bg(alpha(surface, 225), 17, alpha(Color.WHITE, 230)) }, LinearLayout.LayoutParams(dp(44), dp(44)))
+    }
+
+    private fun bottomNavigation(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(5), dp(4), dp(5), dp(5)); this.background = bg(alpha(Color.WHITE, 242), 23, alpha(Color.WHITE, 250)); elevation = dp(5).toFloat()
+        val items = arrayOf("⌂" to "Home", "⌕" to "Search", "▣" to "Library", "≋" to "Equalizer", "⚙" to "Settings")
+        items.forEachIndexed { index, pair ->
+            val selected = index == currentTab
+            val cell = LinearLayout(this@NeonActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(2), dp(3), dp(2), dp(2)); if (selected) this.background = bg(alpha(blue, 25), 16); setOnClickListener { currentTab = index; when (index) { 0 -> showHome(); 1 -> showSearch(); 2 -> showLibrary(); 3 -> showEqualizer(); 4 -> showSettings() }; refreshNav() } }
+            cell.addView(label(pair.first, 19f, if (selected) blue else muted, true).apply { gravity = Gravity.CENTER }); cell.addView(label(pair.second, 9f, if (selected) blue else muted, true).apply { gravity = Gravity.CENTER }); addView(cell, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(2), 0, dp(2), 0) })
         }
     }
 
-    private fun miniPlayer() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(10), dp(8), dp(8), dp(8))
-        background = rounded(alpha(white, 235), 20)
-        val art = FrameLayout(this@NeonActivity).apply {
-            background = rounded(blue, 14)
-            addView(text("◉", 25f, white, true).apply { gravity = Gravity.CENTER })
-        }
+    private fun refreshNav() { for (i in 0 until nav.childCount) { val cell = nav.getChildAt(i) as LinearLayout; val selected = i == currentTab; cell.background = if (selected) bg(alpha(blue, 25), 16) else null; (cell.getChildAt(0) as TextView).setTextColor(if (selected) blue else muted); (cell.getChildAt(1) as TextView).setTextColor(if (selected) blue else muted) } }
+
+    private fun miniPlayer(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), dp(7), dp(7), dp(7)); this.background = bg(alpha(Color.WHITE, 242), 20, alpha(Color.WHITE, 250)); elevation = dp(4).toFloat()
+        val art = FrameLayout(this@NeonActivity).apply { this.background = gradient(indigo, cyan, 14); addView(label("◉", 22f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }
         addView(art, LinearLayout.LayoutParams(dp(50), dp(50)))
-        val info = LinearLayout(this@NeonActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(8), 0)
-            setOnClickListener { nowPlaying() }
-        }
-        info.addView(text("Nothing playing", 14f, ink, true))
-        info.addView(text("Choose a track to start", 11f, muted))
-        addView(info, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(text("▶", 22f, blue, true).apply {
-            gravity = Gravity.CENTER
-            setOnClickListener { nowPlaying() }
-        }, LinearLayout.LayoutParams(dp(44), dp(50)))
+        val info = LinearLayout(this@NeonActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(11), 0, dp(4), 0); setOnClickListener { showNowPlaying() } }
+        miniTitle = label(currentSong, 13.5f, ink, true); miniSubtitle = label(currentArtist, 10.5f, muted); info.addView(miniTitle); info.addView(miniSubtitle.apply { setPadding(0, dp(4), 0, 0) }); addView(info, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(label("♡", 22f, muted).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(38), dp(50)))
+        miniPlay = label(if (playing) "Ⅱ" else "▶", 18f, ink, true).apply { gravity = Gravity.CENTER; setOnClickListener { playing = !playing; updateMini() } }; addView(miniPlay, LinearLayout.LayoutParams(dp(43), dp(50)))
+        addView(label("≋", 20f, ink, true).apply { gravity = Gravity.CENTER; setOnClickListener { showNowPlaying() } }, LinearLayout.LayoutParams(dp(40), dp(50)))
     }
 
-    private fun column() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(18), dp(18), dp(18), dp(18))
+    private fun updateMini() { miniTitle.text = currentSong; miniSubtitle.text = if (playing) "$currentArtist · Playing" else currentArtist; miniPlay.text = if (playing) "Ⅱ" else "▶" }
+    private fun scrollPage(content: View): ScrollView = ScrollView(this).apply { isFillViewport = true; overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS; setBackgroundColor(background); addView(content, ViewGroup.LayoutParams(-1, -1)) }
+    private fun column(): LinearLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(6), dp(8), dp(24)) }
+    private fun clearAndShow(view: View) { page.removeAllViews(); page.addView(view, FrameLayout.LayoutParams(-1, -1)) }
+    private fun section(c: LinearLayout, title: String, action: String = "See all") { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(2), dp(5), dp(2), dp(9)) }; row.addView(label(title, 12f, ink, true), LinearLayout.LayoutParams(0, -2, 1f)); row.addView(label(action, 10.5f, blue, true)); c.addView(row) }
+
+    private fun showHome() {
+        headerTitle.text = "Spotifusion"; val c = column()
+        val greeting = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; greeting.addView(label("Good morning,", 13f, muted)); greeting.addView(label("Kruthagna 👋", 26f, ink, true).apply { setPadding(0, dp(4), 0, 0) }); c.addView(greeting, LinearLayout.LayoutParams(-1, dp(72)).apply { bottomMargin = dp(8) })
+        val hero = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(16), dp(13), dp(16)); this.background = gradient(Color.rgb(52, 87, 221), Color.rgb(106, 73, 222), 23); elevation = dp(4).toFloat() }
+        val heroArt = FrameLayout(this).apply { this.background = gradient(Color.rgb(99, 146, 255), Color.rgb(65, 54, 170), 18); elevation = dp(3).toFloat(); addView(label("◉", 48f, Color.WHITE, true).apply { gravity = Gravity.CENTER }); addView(label("GLASS", 8f, alpha(Color.WHITE, 200), true).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; setPadding(0, 0, 0, dp(8)) }) }
+        hero.addView(heroArt, LinearLayout.LayoutParams(dp(112), dp(112)))
+        val heroInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }; heroInfo.addView(label("FEATURED SESSION", 9f, alpha(Color.WHITE, 210), true)); heroInfo.addView(label("Glass Architecture", 18f, Color.WHITE, true).apply { setPadding(0, dp(7), 0, 0) }); heroInfo.addView(label("Nordic Echoes", 11f, alpha(Color.WHITE, 215)).apply { setPadding(0, dp(4), 0, dp(12)) }); heroInfo.addView(label("  ▶  PLAY NOW  ", 10.5f, blue, true).apply { gravity = Gravity.CENTER; this.background = bg(Color.WHITE, 15); setPadding(dp(5), dp(9), dp(5), dp(9)); setOnClickListener { currentSong = "Glass Architecture"; currentArtist = "Astral Pulse"; playing = true; updateMini(); showNowPlaying() } }, LinearLayout.LayoutParams(-2, dp(38))); hero.addView(heroInfo, LinearLayout.LayoutParams(0, -2, 1f)); c.addView(hero, LinearLayout.LayoutParams(-1, dp(144)).apply { bottomMargin = dp(17) })
+        section(c, "Recently Played"); val recentScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }; val recent = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; recentTrack(recent, "Glass Architecture", "Astral Pulse", blue); recentTrack(recent, "Astral Pulse", "Lunar Drift", indigo); recentTrack(recent, "Midnight Drive", "Neon Skyline", cyan); recentTrack(recent, "Ocean Bloom", "Cobalt Waves", pink); recentScroll.addView(recent); c.addView(recentScroll, LinearLayout.LayoutParams(-1, dp(151)).apply { bottomMargin = dp(12) })
+        section(c, "Made For You"); val mixes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; mixCard(mixes, "Focus\nFlow", blue, cyan); mixCard(mixes, "Chill\nSpace", indigo, pink); mixCard(mixes, "Energy\nBoost", orange, pink); c.addView(mixes, LinearLayout.LayoutParams(-1, dp(142))); c.addView(miniSuggestion(), LinearLayout.LayoutParams(-1, dp(62)).apply { topMargin = dp(9) }); clearAndShow(scrollPage(c))
     }
 
-    private fun heading(c: LinearLayout, title: String, subtitle: String) {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titles.addView(text(title, 25f, ink, true))
-        titles.addView(text(subtitle, 12f, muted).apply { setPadding(0, dp(5), 0, 0) })
-        row.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(text("•", 24f, blue, true))
-        c.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
+    private fun recentTrack(parent: LinearLayout, title: String, artist: String, accent: Int) { val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(7), dp(7), dp(7), dp(4)); setOnClickListener { selectTrack(title, artist) } }; val art = FrameLayout(this).apply { this.background = gradient(accent, Color.rgb(215, 224, 255), 16); addView(label("◉", 28f, Color.WHITE, true).apply { gravity = Gravity.CENTER }); addView(label("▶", 10f, blue, true).apply { gravity = Gravity.BOTTOM or Gravity.RIGHT; this.background = bg(Color.WHITE, 12); setPadding(dp(6), dp(5), dp(6), dp(5)) }) }; card.addView(art, LinearLayout.LayoutParams(dp(102), dp(102))); card.addView(label(title, 10.5f, ink, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(2), dp(6), 0, 0) }); card.addView(label(artist, 9f, muted).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(2), dp(3), 0, 0) }); parent.addView(card, LinearLayout.LayoutParams(dp(116), -1)) }
+    private fun mixCard(parent: LinearLayout, title: String, start: Int, end: Int) { val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(5), 0, dp(5), 0); setOnClickListener { showLibrary() } }; val art = FrameLayout(this).apply { this.background = gradient(start, end, 17); val ring = TextView(this@NeonActivity).apply { text = "◉"; textSize = 30f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; this.background = bg(alpha(Color.WHITE, 25), 999, alpha(Color.WHITE, 100)) }; addView(ring, FrameLayout.LayoutParams(dp(65), dp(65), Gravity.CENTER)); addView(label("▶", 9f, blue, true).apply { gravity = Gravity.BOTTOM or Gravity.RIGHT; this.background = bg(Color.WHITE, 12); setPadding(dp(6), dp(5), dp(6), dp(5)) }) }; card.addView(art, LinearLayout.LayoutParams(dp(108), dp(108))); card.addView(label(title, 10.5f, ink, true).apply { setPadding(dp(2), dp(7), 0, 0) }); parent.addView(card, LinearLayout.LayoutParams(0, -1, 1f)) }
+    private fun miniSuggestion(): LinearLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(9), dp(6), dp(7), dp(6)); this.background = bg(alpha(Color.WHITE, 235), 18, alpha(Color.WHITE, 245)); val art = FrameLayout(this@NeonActivity).apply { this.background = gradient(blue, indigo, 13); addView(label("◉", 19f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }; addView(art, LinearLayout.LayoutParams(dp(48), dp(48))); val info = LinearLayout(this@NeonActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }; info.addView(label("Glass Architecture", 11.5f, ink, true)); info.addView(label("Nordic Echoes", 9.5f, muted).apply { setPadding(0, dp(3), 0, 0) }); addView(info, LinearLayout.LayoutParams(0, -1, 1f)); addView(label("▶", 15f, Color.WHITE, true).apply { gravity = Gravity.CENTER; this.background = bg(blue, 15); setPadding(dp(9), dp(8), dp(9), dp(8)); setOnClickListener { selectTrack("Glass Architecture", "Astral Pulse") } }, LinearLayout.LayoutParams(dp(38), dp(38))) }
+    private fun selectTrack(title: String, artist: String) { currentSong = title; currentArtist = artist; playing = true; updateMini(); showNowPlaying() }
+
+    private fun showSearch() {
+        currentTab = 1; headerTitle.text = "Search"; val c = column(); c.addView(label("Search", 26f, ink, true).apply { setPadding(dp(2), dp(7), 0, dp(14)) })
+        val searchBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(10), 0); this.background = bg(alpha(Color.WHITE, 235), 19, alpha(Color.WHITE, 245)); elevation = dp(2).toFloat() }; searchBox.addView(label("⌕", 23f, muted, true)); val input = EditText(this).apply { hint = "Search songs, artists, albums..."; textSize = 13.5f; setTextColor(ink); setHintTextColor(muted); isSingleLine = true; background = null; setPadding(dp(9), 0, 0, 0) }; searchBox.addView(input, LinearLayout.LayoutParams(0, dp(54), 1f)); searchBox.addView(label("⌁", 19f, muted, true).apply { gravity = Gravity.CENTER }); c.addView(searchBox, LinearLayout.LayoutParams(-1, dp(54)).apply { bottomMargin = dp(15) })
+        section(c, "Recent Searches", "Clear all"); arrayOf("glass architecture", "astral pulse", "nordic echoes", "midnight drive", "ocean bloom").forEach { query -> val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(5), dp(12), dp(5)); setOnClickListener { input.setText(query); input.setSelection(query.length) } }; row.addView(label("◷", 16f, muted), LinearLayout.LayoutParams(dp(28), dp(40))); row.addView(label(query, 11.5f, ink), LinearLayout.LayoutParams(0, dp(40), 1f)); row.addView(label("×", 18f, muted)); c.addView(row, LinearLayout.LayoutParams(-1, dp(50))) }
+        section(c, "Trending Now"); glassRow(c, "Velvet Horizon", "Satin Dust", blue); glassRow(c, "Echoes of You", "Midnight Signal", cyan); glassRow(c, "Endless Blue", "Ocean Bloom", indigo); clearAndShow(scrollPage(c)); refreshNav()
     }
 
-    private fun glassCard(c: LinearLayout, title: String, subtitle: String, icon: String = "♪", accent: Int = blue, click: (() -> Unit)? = null) {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = rounded(alpha(white, 215), 18)
-            if (click != null) setOnClickListener { click() }
-        }
-        val iconBox = FrameLayout(this).apply {
-            background = rounded(alpha(accent, 32), 14)
-            addView(text(icon, 22f, accent, true).apply { gravity = Gravity.CENTER })
-        }
-        card.addView(iconBox, LinearLayout.LayoutParams(dp(48), dp(48)))
-        val info = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), 0, dp(8), 0)
-        }
-        info.addView(text(title, 14f, ink, true))
-        info.addView(text(subtitle, 11f, muted).apply { setPadding(0, dp(4), 0, 0) })
-        card.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-        card.addView(text("›", 28f, muted))
-        c.addView(card, LinearLayout.LayoutParams(-1, dp(74)).apply { bottomMargin = dp(10) })
+    private fun glassRow(c: LinearLayout, title: String, artist: String, accent: Int) { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), dp(7), dp(8), dp(7)); this.background = bg(alpha(Color.WHITE, 215), 16); setOnClickListener { selectTrack(title, artist) } }; val art = FrameLayout(this).apply { this.background = gradient(accent, Color.rgb(210, 220, 250), 13); addView(label("◉", 19f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }; row.addView(art, LinearLayout.LayoutParams(dp(48), dp(48))); val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }; info.addView(label(title, 12f, ink, true)); info.addView(label(artist, 10f, muted).apply { setPadding(0, dp(4), 0, 0) }); row.addView(info, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(label("×", 18f, muted)); c.addView(row, LinearLayout.LayoutParams(-1, dp(64)).apply { bottomMargin = dp(7) }) }
+
+    private fun showNowPlaying() {
+        headerTitle.text = "Now Playing"; val c = column().apply { gravity = Gravity.CENTER_HORIZONTAL }; c.addView(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(label("⌄", 22f, ink, true)); addView(label("Now Playing", 14f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, dp(38), 1f)); addView(label("⋮", 22f, ink, true)) }, LinearLayout.LayoutParams(-1, dp(42)).apply { bottomMargin = dp(4) })
+        val disc = FrameLayout(this).apply { this.background = bg(Color.rgb(252, 253, 255), 999, alpha(blue, 90)); elevation = dp(5).toFloat() }; val vinyl = FrameLayout(this).apply { this.background = bg(Color.rgb(25, 27, 34), 999, alpha(Color.WHITE, 40)); addView(label("◉", 42f, blue, true).apply { gravity = Gravity.CENTER }) }; disc.addView(vinyl, FrameLayout.LayoutParams(dp(214), dp(214), Gravity.CENTER)); c.addView(disc, LinearLayout.LayoutParams(dp(274), dp(274)).apply { topMargin = dp(8); bottomMargin = dp(22) })
+        c.addView(label(currentSong, 22f, ink, true).apply { gravity = Gravity.CENTER }); c.addView(label("$currentArtist · Nordic Echoes", 12f, muted).apply { gravity = Gravity.CENTER; setPadding(0, dp(6), 0, dp(18)) }); val progress = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(3), 0, dp(3), 0) }; val bar = SeekBar(this).apply { max = 100; this.progress = 42; progressTintList = android.content.res.ColorStateList.valueOf(blue); thumbTintList = android.content.res.ColorStateList.valueOf(blue) }; progress.addView(bar, LinearLayout.LayoutParams(-1, dp(28))); val times = LinearLayout(this).apply { addView(label("1:28", 9.5f, muted), LinearLayout.LayoutParams(0, -2, 1f)); addView(label("3:42", 9.5f, muted).apply { gravity = Gravity.RIGHT }) }; progress.addView(times); c.addView(progress, LinearLayout.LayoutParams(-1, dp(47)))
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, dp(7), 0, 0) }; actions.addView(label(if (shuffle) "🔀" else "⇄", 18f, if (shuffle) blue else muted).apply { setOnClickListener { shuffle = !shuffle; setTextColor(if (shuffle) blue else muted) } }, LinearLayout.LayoutParams(dp(45), dp(55))); actions.addView(label("|◀", 21f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(50), dp(55))); actions.addView(label(if (playing) "Ⅱ" else "▶", 24f, Color.WHITE, true).apply { gravity = Gravity.CENTER; this.background = bg(blue, 20); setOnClickListener { playing = !playing; updateMini(); text = if (playing) "Ⅱ" else "▶" } }, LinearLayout.LayoutParams(dp(64), dp(58))); actions.addView(label("▶|", 21f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(50), dp(55))); actions.addView(label("↻", 21f, if (repeat) blue else muted, true).apply { setOnClickListener { repeat = !repeat; setTextColor(if (repeat) blue else muted) } }, LinearLayout.LayoutParams(dp(45), dp(55))); c.addView(actions); clearAndShow(scrollPage(c))
     }
 
-    private fun hero(c: LinearLayout) {
-        val h = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(22), dp(20), dp(20))
-            background = rounded(blue, 24)
-        }
-        h.addView(text("FEATURED GLASS SESSION", 10f, alpha(white, 230), true))
-        h.addView(text("Nordic Resonance", 27f, white, true).apply { setPadding(0, dp(8), 0, 0) })
-        h.addView(text("Immersive frequencies and frosted vinyl tones.", 12f, alpha(white, 220)).apply { setPadding(0, dp(5), 0, dp(16)) })
-        h.addView(text("  ▶   LISTEN NOW  ", 12f, blue, true).apply {
-            gravity = Gravity.CENTER
-            background = rounded(white, 18)
-            setPadding(dp(8), dp(11), dp(8), dp(11))
-            setOnClickListener { nowPlaying() }
-        }, LinearLayout.LayoutParams(-2, dp(44)))
-        c.addView(h, LinearLayout.LayoutParams(-1, dp(190)).apply { bottomMargin = dp(18) })
-    }
+    private fun showLibrary() { currentTab = 2; headerTitle.text = "Your Library"; val c = column(); c.addView(label("Your Library", 26f, ink, true).apply { setPadding(dp(2), dp(7), 0, dp(14)) }); val filters = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; arrayOf("Playlists", "Songs", "Artists", "Albums").forEachIndexed { i, name -> filters.addView(label(" $name ", 10.5f, if (i == 0) blue else muted, true).apply { gravity = Gravity.CENTER; this.background = bg(if (i == 0) alpha(blue, 28) else alpha(Color.WHITE, 220), 13); setPadding(dp(4), dp(8), dp(4), dp(8)) }, LinearLayout.LayoutParams(0, dp(36), 1f).apply { setMargins(dp(2), 0, dp(2), 0) }) }; c.addView(filters, LinearLayout.LayoutParams(-1, dp(38)).apply { bottomMargin = dp(14) }); libraryItem(c, "♥", "Liked Songs", "432 songs", blue); libraryItem(c, "◉", "Chill Vibes", "by Kruthagna · 50 songs", indigo); libraryItem(c, "◉", "Night Drive", "by Kruthagna · 42 songs", cyan); libraryItem(c, "✦", "Focus Flow", "by Kruthagna · 38 songs", pink); libraryItem(c, "◉", "Retro Wave", "by Kruthagna · 55 songs", orange); libraryItem(c, "≋", "Workout Hits", "by Kruthagna · 60 songs", blue); clearAndShow(scrollPage(c)); refreshNav() }
+    private fun libraryItem(c: LinearLayout, icon: String, title: String, sub: String, accent: Int) { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(7), dp(7), dp(7), dp(7)); this.background = bg(alpha(Color.WHITE, 218), 18); setOnClickListener { showNowPlaying() } }; row.addView(FrameLayout(this).apply { this.background = gradient(accent, Color.rgb(215, 224, 255), 15); addView(label(icon, 21f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }, LinearLayout.LayoutParams(dp(56), dp(56))); val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(11), 0, dp(5), 0) }; info.addView(label(title, 12.5f, ink, true)); info.addView(label(sub, 10f, muted).apply { setPadding(0, dp(4), 0, 0) }); row.addView(info, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(label("⋮", 19f, muted)); c.addView(row, LinearLayout.LayoutParams(-1, dp(70)).apply { bottomMargin = dp(8) }) }
 
-    private fun home() {
-        currentTab = 0
-        val c = column()
-        heading(c, "Good morning, Kruthagna", "Your Nordic music space")
-        hero(c)
-        c.addView(text("RECENTLY PLAYED", 11f, muted, true).apply { setPadding(0, 0, 0, dp(10)) })
-        glassCard(c, "Glass Architecture", "Astral Pulse · 3:45", "◉", blue) { nowPlaying() }
-        glassCard(c, "Obsidian & Light", "Kaelen Voss · 4:12", "◉", Color.rgb(99,102,241)) { nowPlaying() }
-        glassCard(c, "Frictionless Orbit", "Sora & The Echoes · 2:58", "◉", Color.rgb(245,158,11)) { nowPlaying() }
-        c.addView(text("MADE FOR YOU", 11f, muted, true).apply { setPadding(0, dp(12), 0, dp(10)) })
-        glassCard(c, "Daily Mix 1", "Glass · Ambient · Electronic", "✦", blue) { library() }
-        glassCard(c, "Chill Vibes", "Lofi · Instrumental", "◌", Color.rgb(99,102,241)) { library() }
-        show(c)
-    }
+    private fun showEqualizer() { currentTab = 3; headerTitle.text = "Equalizer"; val c = column(); c.addView(label("Equalizer", 26f, ink, true).apply { setPadding(dp(2), dp(7), 0, dp(4)) }); c.addView(label("Fine-tune your sound", 11.5f, muted).apply { setPadding(dp(2), 0, 0, dp(15)) }); val presetRow = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }; val presets = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; arrayOf("Custom", "Rock", "Pop", "Electronic", "Jazz").forEachIndexed { i, p -> presets.addView(label(" $p ", 10.5f, if (i == 0) Color.WHITE else muted, true).apply { gravity = Gravity.CENTER; this.background = bg(if (i == 0) blue else alpha(Color.WHITE, 220), 14); setPadding(dp(8), dp(9), dp(8), dp(9)) }, LinearLayout.LayoutParams(-2, dp(38)).apply { rightMargin = dp(7) }) }; presetRow.addView(presets); c.addView(presetRow, LinearLayout.LayoutParams(-1, dp(42)).apply { bottomMargin = dp(14) }); val panel = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(7), dp(18), dp(7), dp(15)); this.background = bg(alpha(Color.WHITE, 225), 22, alpha(Color.WHITE, 245)); elevation = dp(2).toFloat() }; val freqs = arrayOf("60Hz", "230Hz", "910Hz", "3.6k", "14k"); val levels = intArrayOf(72, 48, 60, 80, 54); freqs.forEachIndexed { i, f -> val band = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }; band.addView(label("+12", 8f, muted).apply { gravity = Gravity.CENTER }); val seek = SeekBar(this).apply { max = 100; this.progress = levels[i]; rotation = -90f; progressTintList = android.content.res.ColorStateList.valueOf(blue); thumbTintList = android.content.res.ColorStateList.valueOf(blue) }; band.addView(seek, LinearLayout.LayoutParams(dp(45), dp(150))); band.addView(label(f, 9f, ink, true).apply { gravity = Gravity.CENTER }); panel.addView(band, LinearLayout.LayoutParams(0, dp(190), 1f)) }; c.addView(panel, LinearLayout.LayoutParams(-1, dp(222))); val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }; arrayOf("Bass Boost", "Virtualizer", "Loudness").forEach { name -> controls.addView(label("○\n$name", 10f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, dp(70), 1f)) }; c.addView(controls); clearAndShow(scrollPage(c)); refreshNav() }
 
-    private fun search() {
-        currentTab = 1
-        val c = column()
-        heading(c, "Search", "Artists, tracks, albums and more")
-        val searchBox = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), 0, dp(14), 0)
-            background = rounded(alpha(white, 220), 20)
-        }
-        searchBox.addView(text("⌕", 25f, muted, true))
-        searchBox.addView(EditText(this).apply {
-            hint = "Search your music"
-            setHintTextColor(muted)
-            setTextColor(ink)
-            textSize = 14f
-            setSingleLine(true)
-            background = null
-            setPadding(dp(10), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, dp(54), 1f))
-        c.addView(searchBox, LinearLayout.LayoutParams(-1, dp(54)).apply { bottomMargin = dp(18) })
-        c.addView(text("RECENT SEARCHES", 11f, muted, true).apply { setPadding(0, 0, 0, dp(10)) })
-        arrayOf("Gramophone Acoustics", "Nordic Synth", "Astral Pulse", "5-Band Preset").forEach {
-            c.addView(text("  $it  ", 12f, ink, true).apply {
-                background = rounded(alpha(white, 220), 16)
-                setPadding(dp(5), dp(10), dp(5), dp(10))
-            }, LinearLayout.LayoutParams(-2, dp(38)).apply { bottomMargin = dp(8) })
-        }
-        c.addView(text("BROWSE", 11f, muted, true).apply { setPadding(0, dp(14), 0, dp(10)) })
-        glassCard(c, "Songs", "Search individual tracks", "♪", blue)
-        glassCard(c, "Artists", "Explore artists", "♬", Color.rgb(99,102,241))
-        glassCard(c, "Albums", "Discover albums", "▣", Color.rgb(14,165,233))
-        glassCard(c, "Playlists", "Find playlists and mixes", "≡", Color.rgb(245,158,11))
-        show(c)
-    }
-
-    private fun library() {
-        currentTab = 2
-        val c = column()
-        heading(c, "Your Library", "Everything you saved in one place")
-        glassCard(c, "Liked Songs", "428 tracks", "♥", blue) { nowPlaying() }
-        glassCard(c, "Chill Vibes & Glass", "32 songs", "◉", Color.rgb(14,165,233)) { nowPlaying() }
-        glassCard(c, "Nordic Morning Ambient", "18 songs", "◉", Color.rgb(99,102,241)) { nowPlaying() }
-        glassCard(c, "Local Music", "Music on this device", "▣", Color.rgb(245,158,11))
-        show(c)
-    }
-
-    private fun equalizer() {
-        currentTab = 3
-        val c = column()
-        heading(c, "Audio Equalizer", "Precision 5-band frequency shaping")
-        glassCard(c, "Nordic Flat", "Balanced reference sound", "≋", blue)
-        glassCard(c, "Acoustic Glass", "Warm acoustic presence", "♫", Color.rgb(14,165,233))
-        glassCard(c, "Deep Bass", "Low-end emphasis", "≈", Color.rgb(99,102,241))
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(14), dp(18), dp(14), dp(18))
-            background = rounded(alpha(white, 215), 20)
-        }
-        arrayOf("60", "230", "910", "3.6k", "14k").forEach { freq ->
-            val band = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-            }
-            band.addView(text("+0", 10f, muted, true))
-            band.addView(SeekBar(this).apply {
-                max = 24
-                progress = 12
-                rotation = -90f
-            }, LinearLayout.LayoutParams(dp(80), dp(50)))
-            band.addView(text(freq, 10f, ink, true).apply { setPadding(0, dp(4), 0, 0) })
-            panel.addView(band, LinearLayout.LayoutParams(0, dp(150), 1f))
-        }
-        c.addView(panel)
-        show(c)
-    }
-
-    private fun settings() {
-        currentTab = 4
-        val c = column()
-        heading(c, "Settings", "Configure your Spotifusion experience")
-        glassCard(c, "High Fidelity Audio", "Best available streaming quality", "◉", blue)
-        glassCard(c, "Dynamic Glass", "Ambient visual effects", "✧", Color.rgb(14,165,233))
-        glassCard(c, "Shake to Change", "Change track by shaking your phone", "↯", Color.rgb(99,102,241))
-        glassCard(c, "Storage", "Offline songs and cached artwork", "▣", Color.rgb(245,158,11))
-        glassCard(c, "Account", "Profile and connected services", "◎", blue)
-        glassCard(c, "About Spotifusion", "Version 1.0", "ⓘ", muted)
-        show(c)
-    }
-
-    private fun nowPlaying() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(20), dp(22), dp(20), dp(22))
-            setBackgroundColor(bg)
-        }
-        root.addView(text("NOW PLAYING", 11f, muted, true))
-        root.addView(text("Glass Architecture", 23f, ink, true).apply { setPadding(0, dp(10), 0, 0) })
-        root.addView(text("Astral Pulse · Nordic Studio Sessions", 12f, muted).apply { setPadding(0, dp(4), 0, dp(18)) })
-        val record = FrameLayout(this).apply {
-            background = rounded(Color.rgb(24,24,27), 200)
-            elevation = dp(8).toFloat()
-            addView(text("SPOTIFUSION", 11f, white, true).apply { gravity = Gravity.CENTER })
-            addView(text("•", 22f, blue, true).apply { gravity = Gravity.CENTER })
-        }
-        root.addView(record, LinearLayout.LayoutParams(dp(290), dp(290)).apply { bottomMargin = dp(24) })
-        root.addView(SeekBar(this).apply { max = 100; progress = 42 }, LinearLayout.LayoutParams(-1, dp(36)))
-        root.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(text("1:28", 10f, muted), LinearLayout.LayoutParams(0, -1, 1f))
-            addView(text("3:45", 10f, muted).apply { gravity = Gravity.RIGHT })
-        }, LinearLayout.LayoutParams(-1, dp(24)))
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, 0)
-        }
-        controls.addView(text("⤨", 22f, muted, true), LinearLayout.LayoutParams(dp(50), dp(60)))
-        controls.addView(text("‹", 36f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(60), dp(60)))
-        controls.addView(text("▶", 28f, white, true).apply {
-            gravity = Gravity.CENTER
-            background = rounded(blue, 20)
-        }, LinearLayout.LayoutParams(dp(64), dp(64)))
-        controls.addView(text("›", 36f, ink, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(60), dp(60)))
-        controls.addView(text("↻", 22f, muted, true), LinearLayout.LayoutParams(dp(50), dp(60)))
-        root.addView(controls)
-        content.removeAllViews()
-        content.addView(ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            addView(root)
-        })
-    }
-
-    private fun show(c: LinearLayout) {
-        content.removeAllViews()
-        val scroll = ScrollView(this)
-        scroll.isVerticalScrollBarEnabled = false
-        scroll.addView(c)
-        content.addView(scroll)
-    }
+    private fun showSettings() { currentTab = 4; headerTitle.text = "Settings"; val c = column(); c.addView(label("Settings", 26f, ink, true).apply { setPadding(dp(2), dp(7), 0, dp(4)) }); c.addView(label("Playback, appearance and audio", 11.5f, muted).apply { setPadding(dp(2), 0, 0, dp(15)) }); settingsSection(c, "Playback"); settingRow(c, "Playback Quality", "High", false); settingRow(c, "Crossfade", "5 sec", false); settingRow(c, "Gapless Playback", "ON", true); settingRow(c, "Normalize Volume", "ON", true); settingsSection(c, "Appearance"); settingRow(c, "Theme", "Light", false); settingRow(c, "Accent Color", "Blue", false); settingsSection(c, "Audio"); settingRow(c, "Equalizer", "Custom", false); settingRow(c, "Bass Boost", "Moderate", false); settingsSection(c, "Other"); settingRow(c, "Sleep Timer", "Off", false); settingRow(c, "Shake to change song", "ON", true); clearAndShow(scrollPage(c)); refreshNav() }
+    private fun settingsSection(c: LinearLayout, title: String) { c.addView(label(title, 10f, muted, true).apply { letterSpacing = .08f; setPadding(dp(3), dp(10), 0, dp(7)) }) }
+    private fun settingRow(c: LinearLayout, title: String, value: String, toggle: Boolean) { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(13), dp(7), dp(10), dp(7)); this.background = bg(alpha(Color.WHITE, 222), 16) }; row.addView(label(title, 11.5f, ink, true), LinearLayout.LayoutParams(0, dp(48), 1f)); if (toggle) row.addView(label("●", 18f, blue, true).apply { gravity = Gravity.CENTER }) else row.addView(label("$value  ›", 10.5f, muted).apply { gravity = Gravity.CENTER }); c.addView(row, LinearLayout.LayoutParams(-1, dp(62)).apply { bottomMargin = dp(7) }) }
 }
