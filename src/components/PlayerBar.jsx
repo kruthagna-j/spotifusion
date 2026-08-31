@@ -206,7 +206,7 @@ export default function PlayerBar() {
             value={player.muted ? 0 : player.volume}
             onChange={(e) => player.changeVolume(Number(e.target.value))}
             aria-label="Volume"
-            className="w-24 accent-white"
+            className="w-24 accent-brand volume-slider"
           />
         </div>
       </div>
@@ -247,7 +247,7 @@ function SeekBar({ player, compact }) {
         value={player.progress}
         onChange={(e) => player.seekTo(Number(e.target.value))}
         aria-label="Seek"
-        className="w-full accent-white h-1"
+        className="w-full accent-brand h-1 seek-slider"
       />
       {compact && <span className="text-[11px] text-text-subdued w-9">{formatTime(player.duration)}</span>}
       {!compact && (
