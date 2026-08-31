@@ -12,6 +12,7 @@ import LikedSongs from '@/pages/LikedSongs'
 import Playlist from '@/pages/Playlist'
 import LocalFiles from '@/pages/LocalFiles'
 import Settings from '@/pages/Settings'
+import Equalizer from '@/pages/Equalizer'
 import RecentlyPlayed from '@/pages/RecentlyPlayed'
 import Discover from '@/pages/Discover'
 import Collection from '@/pages/Collection'
@@ -30,7 +31,6 @@ export default function App() {
   const online = useOnlineStatus()
   const location = useLocation()
   const { user, profile, authLoading } = useAuth()
-
   const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function App() {
   if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
   if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /></Routes>
 
-  return <div className="h-screen flex flex-col bg-bg text-text overflow-hidden">
+  return <div className="liquid-glass h-screen flex flex-col overflow-hidden bg-bg text-text">
     {!online && <div className="shrink-0 bg-yellow-600/90 text-black text-xs font-semibold text-center py-1.5 px-4">You're offline. Your downloaded/local songs are still available — online search and streaming need a connection.</div>}
     <div className="flex flex-1 min-h-0"><Sidebar/><div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden"><TopBar/><main className="flex-1 min-h-0 overflow-y-auto scrollbar-none pb-36 md:pb-6 overscroll-contain">
       <Routes>
@@ -69,6 +69,7 @@ export default function App() {
         <Route path="/playlist/:id" element={<Playlist />} />
         <Route path="/local-files" element={<LocalFiles />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/equalizer" element={<Equalizer />} />
         <Route path="/recently-played" element={<RecentlyPlayed />} />
         <Route path="/discover" element={<Discover />} />
         <Route path="/artist/:value" element={<Collection type="artist" />} />
