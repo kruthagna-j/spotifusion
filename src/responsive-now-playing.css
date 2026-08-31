@@ -1,0 +1,3 @@
+.reference-now-playing-legacy{display:block}
+@media (min-width:768px){.reference-now-playing-legacy{display:block}.now-playing-reference{display:none!important}}
+@media (max-width:767px){.reference-now-playing-legacy{display:none!important}.now-playing-reference{display:block!important}}
