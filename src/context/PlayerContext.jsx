@@ -199,7 +199,7 @@ export function PlayerProvider({ children }) {
   }, [isPlaying, isLocal])
 
   const loadAndPlay = useCallback(
-    async (index, list = queue, recoveryDepth = 0) => {
+    async (index, list = queue) => {
       const track = list[index]
       if (!track) return
       setQueueIndex(index)
@@ -210,13 +210,7 @@ export function PlayerProvider({ children }) {
         ytPlayerRef.current?.pauseVideo?.()
         const blob = await getLocalSongBlob(track.id)
         if (!blob) {
-          // A local record can outlive its underlying file. Recover instead of
-          // leaving the player stuck on a dead track.
           setIsPlaying(false)
-          if (recoveryDepth < list.length - 1) {
-            const nextIndex = index + 1 < list.length ? index + 1 : 0
-            if (nextIndex !== index) await loadAndPlay(nextIndex, list, recoveryDepth + 1)
-          }
           return
         }
         if (currentObjectUrl.current) URL.revokeObjectURL(currentObjectUrl.current)
@@ -231,11 +225,6 @@ export function PlayerProvider({ children }) {
           await audio.play()
         } catch {
           setIsPlaying(false)
-          // Autoplay/media errors should not leave a local queue stuck.
-          if (recoveryDepth < list.length - 1) {
-            const nextIndex = index + 1 < list.length ? index + 1 : 0
-            if (nextIndex !== index) await loadAndPlay(nextIndex, list, recoveryDepth + 1)
-          }
         }
       } else {
         localAudioRef.current?.pause()
@@ -286,11 +275,23 @@ export function PlayerProvider({ children }) {
       if (details.seekTime != null) seekTo(details.seekTime)
     })
     try {
-      if (duration) navigator.mediaSession.setPositionState({ duration, position: Math.min(progress, duration), playbackRate: 1 })
-    } catch { /* no-op */ }
+      if (duration) {
+        navigator.mediaSession.setPositionState({
+          duration,
+          position: Math.min(progress, duration),
+          playbackRate: 1,
+        })
+      }
+    } catch {
+      // Some browsers throw if position > duration transiently; safe to ignore.
+    }
     return () => {
       ;['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((action) => {
-        try { navigator.mediaSession.setActionHandler(action, null) } catch { /* no-op */ }
+        try {
+          navigator.mediaSession.setActionHandler(action, null)
+        } catch {
+          /* no-op */
+        }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,6 +308,7 @@ export function PlayerProvider({ children }) {
   function setSleepTimer(seconds) {
     clearSleepTimer()
     if (!seconds) return
+    const durationMs = seconds * 1000
     setSleepTimerSeconds(seconds)
     sleepTimerRef.current = setTimeout(() => {
       if (isLocal) localAudioRef.current?.pause()
@@ -314,14 +316,21 @@ export function PlayerProvider({ children }) {
       setIsPlaying(false)
       setSleepTimerSeconds(null)
       sleepTimerRef.current = null
-    }, seconds * 1000)
+    }, durationMs)
   }
 
-  useEffect(() => () => { if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current) }, [])
+  useEffect(() => {
+    return () => {
+      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current)
+    }
+  }, [])
+
+  // Public API -----------------------------------------------------------
 
   function resetShuffleOrder(length = queue.length, currentIndex = queueIndex) {
     const indices = []
     for (let i = 0; i < length; i++) if (i !== currentIndex) indices.push(i)
+    // Fisher-Yates: O(n), unbiased, and avoids repeated random picks.
     for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]] }
     shuffleStateRef.current = { order: indices, position: -1 }
   }
@@ -373,6 +382,7 @@ export function PlayerProvider({ children }) {
 
   function playPrevious() {
     if (!queue.length) return
+    // Restart current track if we're more than 3s in (Spotify behavior)
     if (progress > 3) {
       if (isLocal) localAudioRef.current.currentTime = 0
       else ytPlayerRef.current.seekTo(0)
@@ -410,28 +420,101 @@ export function PlayerProvider({ children }) {
     if (localAudioRef.current) localAudioRef.current.volume = next ? 0 : volume / 100
   }
 
-  const outputSupported = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.selectAudioOutput
+  // Real equivalent of Spotify's "Connect to a device" for Bluetooth
+  // speakers/headphones: this doesn't pair Bluetooth (that's always an
+  // OS-level action, in any app), it lets the user pick which *already
+  // paired/connected* output device audio plays through, from inside the
+  // app — which is what Spotify's own feature actually does under the hood.
+  // Only affects local-file playback: YouTube's audio renders inside its
+  // own cross-origin iframe, which this API has no access to.
+  //
+  // Gated on selectAudioOutput specifically (not just setSinkId): older
+  // Chrome has setSinkId without selectAudioOutput, but picking a device
+  // that way needs mic-permission-gated device labels with no clean UX —
+  // rather than ship a half-working fallback, the button simply doesn't
+  // appear on browsers that lack the full picker.
+  const outputSupported =
+    typeof HTMLMediaElement !== 'undefined' &&
+    'setSinkId' in HTMLMediaElement.prototype &&
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.selectAudioOutput
 
   async function chooseOutputDevice() {
     if (!outputSupported) return
     try {
       const device = await navigator.mediaDevices.selectAudioOutput()
-      if (audioCtxRef.current && 'setSinkId' in audioCtxRef.current) await audioCtxRef.current.setSinkId(device.deviceId)
-      else await localAudioRef.current?.setSinkId(device.deviceId)
+      // If the EQ graph is active, audio is routed through
+      // audioCtxRef.current.destination, not the <audio> element directly —
+      // setSinkId has to target whichever one is actually producing output.
+      if (audioCtxRef.current && 'setSinkId' in audioCtxRef.current) {
+        await audioCtxRef.current.setSinkId(device.deviceId)
+      } else {
+        await localAudioRef.current?.setSinkId(device.deviceId)
+      }
       setOutputDeviceId(device.deviceId)
       setOutputDeviceLabel(device.label || 'Connected device')
     } catch (err) {
-      if (err.name !== 'NotFoundError' && err.name !== 'NotAllowedError') console.error('Output device selection failed:', err)
+      if (err.name !== 'NotFoundError' && err.name !== 'NotAllowedError') {
+        console.error('Output device selection failed:', err)
+      }
     }
   }
 
-  const rowPlayTrack = useCallback((track, contextTracks = null) => playTrack(track, contextTracks), [loadAndPlay, shuffle])
+  const value = useMemo(() => ({
+    queue,
+    queueIndex,
+    currentTrack,
+    isPlaying,
+    volume,
+    muted,
+    shuffle,
+    repeatMode,
+    progress,
+    duration,
+    sleepTimerSeconds,
+    outputSupported,
+    outputDeviceId,
+    outputDeviceLabel,
+    eqGains,
+    eqPreset,
+    isLocal,
+    playTrack,
+    playNext,
+    playPrevious,
+    togglePlay,
+    seekTo,
+    changeVolume,
+    toggleMute,
+    setShuffle,
+    setRepeatMode,
+    setSleepTimer,
+    clearSleepTimer,
+    chooseOutputDevice,
+    setEqBand,
+    applyEqPreset,
+    resetShuffleOrder,
+    setQueue,
+    setQueueIndex,
+    loadAndPlay,
+  }), [queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration, sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, loadAndPlay])
 
-  const value = useMemo(() => ({ queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration, sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, playTrack, playNext, playPrevious, togglePlay, seekTo, changeVolume, toggleMute, setShuffle, setRepeatMode, setSleepTimer, clearSleepTimer, chooseOutputDevice, setEqBand, applyEqPreset, resetShuffleOrder, setQueue, setQueueIndex, loadAndPlay }), [queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration, sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, loadAndPlay])
-  const rowValue = useMemo(() => ({ playTrack: rowPlayTrack, currentTrack, isPlaying }), [rowPlayTrack, currentTrack, isPlaying])
+  const rowValue = useMemo(() => ({ playTrack, currentTrack, isPlaying }), [currentTrack, isPlaying, playTrack])
 
-  return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={rowValue}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
+  return (
+    <PlayerContext.Provider value={value}>
+      <PlayerRowContext.Provider value={rowValue}>{children}</PlayerRowContext.Provider>
+    </PlayerContext.Provider>
+  )
 }
 
-export function usePlayer() { const ctx = useContext(PlayerContext); if (!ctx) throw new Error('usePlayer must be used within PlayerProvider'); return ctx }
-export function usePlayerRow() { const ctx = useContext(PlayerRowContext); if (!ctx) throw new Error('usePlayerRow must be used within PlayerProvider'); return ctx }
+export function usePlayer() {
+  const ctx = useContext(PlayerContext)
+  if (!ctx) throw new Error('usePlayer must be used within PlayerProvider')
+  return ctx
+}
+
+export function usePlayerRow() {
+  const ctx = useContext(PlayerRowContext)
+  if (!ctx) throw new Error('usePlayerRow must be used within PlayerProvider')
+  return ctx
+}
