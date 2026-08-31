@@ -1,133 +1,96 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useAuth } from './AuthContext'
-import { recordPlay } from '@/lib/library'
-import { getLocalSongBlob } from '@/lib/localMusicDb'
-import { isPrivateSession } from '@/lib/privacySettings'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+
+import { getLocalSongBlob } from '../lib/localMusicDb'
+import { recordPlay } from '../lib/library'
+import { isPrivateSession } from '../lib/privacySettings'
 
 const PlayerContext = createContext(null)
 const PlayerRowContext = createContext(null)
 
-// 5-band EQ, standard-ish frequencies. Only applies to local files: YouTube
-// audio plays inside a cross-origin <iframe>, and browsers deliberately
-// block reading/processing audio from a cross-origin source via Web Audio
-// (a security boundary, not a bug) — so there is no technically honest way
-// to apply EQ to YouTube-backed playback. The UI disables EQ for those
-// tracks rather than pretending it works.
-export const EQ_BANDS = [60, 230, 910, 3600, 14000]
-export const EQ_PRESETS = {
+const EQ_PRESETS = {
   Flat: [0, 0, 0, 0, 0],
-  Pop: [-1, 2, 3, 2, -1],
-  Rock: [4, 2, -2, 2, 3],
-  Classical: [3, 2, 0, 2, 3],
-  Jazz: [2, 1, -1, 1, 2],
-  'Bass Boost': [6, 4, 0, 0, 0],
-  Vocal: [-2, 0, 3, 3, 0],
-}
-
-// Loads the YouTube IFrame Player API script once.
-function useYouTubeApi() {
-  const [ready, setReady] = useState(!!window.YT?.Player)
-  useEffect(() => {
-    if (window.YT?.Player) {
-      setReady(true)
-      return
-    }
-    const prev = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      prev?.()
-      setReady(true)
-    }
-    if (!document.getElementById('yt-iframe-api')) {
-      const tag = document.createElement('script')
-      tag.id = 'yt-iframe-api'
-      tag.src = 'https://www.youtube.com/iframe_api'
-      document.head.appendChild(tag)
-    }
-  }, [])
-  return ready
+  Bass: [6, 4, 1, 0, -1],
+  Treble: [-1, 0, 1, 4, 6],
+  Vocal: [-2, 1, 4, 3, 1],
+  Rock: [4, 2, -1, 2, 4],
 }
 
 export function PlayerProvider({ children }) {
-  const apiReady = useYouTubeApi()
-  const { user } = useAuth()
-  const ytPlayerRef = useRef(null)
-  const localAudioRef = useRef(null)
-  const currentObjectUrl = useRef(null)
-  const progressTimer = useRef(null)
-  const sleepTimerRef = useRef(null)
-  const shuffleStateRef = useRef({ order: [], position: -1 })
-
-  // Web Audio graph for the local-file EQ (created lazily, once).
-  const audioCtxRef = useRef(null)
-  const eqFiltersRef = useRef(null)
-
-  const savedPlayerState = (() => {
-    try { return JSON.parse(localStorage.getItem('spotifusion:player-state:v2') || 'null') || {} } catch { return {} }
-  })()
-  const initialQueue = Array.isArray(savedPlayerState.queue) ? savedPlayerState.queue : []
-  const initialIndex = Number.isInteger(savedPlayerState.queueIndex) && savedPlayerState.queueIndex >= 0 && savedPlayerState.queueIndex < initialQueue.length ? savedPlayerState.queueIndex : -1
-  const [queue, setQueue] = useState(initialQueue) // array of track objects
-  const [queueIndex, setQueueIndex] = useState(initialIndex)
+  const [queue, setQueue] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('spotifusion:queue:v2') || '[]') || [] } catch { return [] }
+  })
+  const [queueIndex, setQueueIndex] = useState(() => {
+    try { return Number(localStorage.getItem('spotifusion:queue-index:v2') || 0) || 0 } catch { return 0 }
+  })
   const [isPlaying, setIsPlaying] = useState(false)
-  const [progress, setProgress] = useState(0) // seconds
+  const [volume, setVolume] = useState(() => {
+    try { return Number(localStorage.getItem('spotifusion:volume') || 80) || 80 } catch { return 80 }
+  })
+  const [muted, setMuted] = useState(false)
+  const [shuffle, setShuffle] = useState(false)
+  const [repeatMode, setRepeatMode] = useState('off')
+  const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [volume, setVolume] = useState(Number.isFinite(savedPlayerState.volume) ? savedPlayerState.volume : 70)
-  const [muted, setMuted] = useState(Boolean(savedPlayerState.muted))
-  const [shuffle, setShuffle] = useState(Boolean(savedPlayerState.shuffle))
-  const [repeatMode, setRepeatMode] = useState(['off','all','one'].includes(savedPlayerState.repeatMode) ? savedPlayerState.repeatMode : 'off') // off | all | one
+  const [sleepTimerSeconds, setSleepTimerSeconds] = useState(null)
+  const [outputDeviceId, setOutputDeviceId] = useState('default')
+  const [outputDeviceLabel, setOutputDeviceLabel] = useState('Default device')
   const [eqGains, setEqGains] = useState(EQ_PRESETS.Flat)
   const [eqPreset, setEqPreset] = useState('Flat')
-  const [outputDeviceId, setOutputDeviceId] = useState(null) // null = system default
-  const [outputDeviceLabel, setOutputDeviceLabel] = useState(null)
-  const [sleepTimerSeconds, setSleepTimerSeconds] = useState(null)
-  const [nowPlayingOpen, setNowPlayingOpen] = useState(false)
+  const [currentTrack, setCurrentTrack] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('spotifusion:current-track:v2') || 'null') || null } catch { return null }
+  })
 
-  const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
-  const isLocal = currentTrack?.source === 'local'
+  const localAudioRef = useRef(null)
+  const ytPlayerRef = useRef(null)
+  const apiReady = typeof window !== 'undefined' && !!window.YT
+  const progressTimer = useRef(null)
+  const currentObjectUrl = useRef(null)
+  const handleEndedRef = useRef(() => {})
+  const shuffleStateRef = useRef({ order: [], position: -1 })
+  const sleepTimerRef = useRef(null)
+  const audioCtxRef = useRef(null)
+  const eqSourceRef = useRef(null)
 
-  // Persist navigation-independent player state. This prevents the queue from
-  // disappearing when a route remounts or the browser refreshes. Playback is
-  // intentionally not auto-started because mobile browsers block autoplay.
   useEffect(() => {
     try {
-      localStorage.setItem('spotifusion:player-state:v2', JSON.stringify({
-        queue, queueIndex, volume, muted, shuffle, repeatMode,
-      }))
+      localStorage.setItem('spotifusion:queue:v2', JSON.stringify(queue))
+      localStorage.setItem('spotifusion:queue-index:v2', String(queueIndex))
+      if (currentTrack) localStorage.setItem('spotifusion:current-track:v2', JSON.stringify(currentTrack))
+      else localStorage.removeItem('spotifusion:current-track:v2')
+      localStorage.setItem('spotifusion:volume', String(volume))
     } catch { /* storage is best effort */ }
-  }, [queue, queueIndex, volume, muted, shuffle, repeatMode])
+  }, [queue, queueIndex, currentTrack, volume])
 
-  // Keep the latest handler in a ref so the <audio> "ended" listener (added
-  // once) always calls the current repeatMode/queue-aware logic.
-  const handleEndedRef = useRef(() => {})
+  const isLocal = currentTrack?.source === 'local'
 
-  // Build the Web Audio graph the first time it's needed: source -> 5x
-  // BiquadFilter (peaking EQ bands) -> destination. createMediaElementSource
-  // can only be called ONCE per <audio> element ever, hence the ref guard.
   function ensureEqGraph() {
-    if (eqFiltersRef.current) return
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (!AudioCtx || !localAudioRef.current) return
-    const ctx = new AudioCtx()
-    const source = ctx.createMediaElementSource(localAudioRef.current)
-    const filters = EQ_BANDS.map((freq, i) => {
-      const filter = ctx.createBiquadFilter()
-      filter.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking'
-      filter.frequency.value = freq
-      filter.Q.value = 1
-      filter.gain.value = eqGains[i]
-      return filter
-    })
-    source.connect(filters[0])
-    for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1])
-    filters[filters.length - 1].connect(ctx.destination)
-    audioCtxRef.current = ctx
-    eqFiltersRef.current = filters
+    const audio = localAudioRef.current
+    if (!audio || eqSourceRef.current) return
+    try {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+      if (!AudioContextCtor) return
+      const ctx = new AudioContextCtor()
+      const source = ctx.createMediaElementSource(audio)
+      const filters = [60, 230, 910, 3600, 14000].map((frequency) => {
+        const filter = ctx.createBiquadFilter()
+        filter.type = 'peaking'
+        filter.frequency.value = frequency
+        filter.Q.value = 1
+        filter.gain.value = 0
+        return filter
+      })
+      let node = source
+      filters.forEach((filter) => { node.connect(filter); node = filter })
+      node.connect(ctx.destination)
+      audioCtxRef.current = ctx
+      eqSourceRef.current = { source, filters }
+    } catch {
+      // EQ is an enhancement; playback should continue without it.
+    }
   }
 
   function applyEqGains(gains) {
-    eqFiltersRef.current?.forEach((filter, i) => {
-      filter.gain.value = gains[i]
-    })
+    eqSourceRef.current?.filters?.forEach((filter, index) => { filter.gain.value = gains[index] || 0 })
   }
 
   function setEqBand(index, value) {
@@ -237,10 +200,11 @@ export function PlayerProvider({ children }) {
   }, [isPlaying, isLocal])
 
   const loadAndPlay = useCallback(
-    async (index, list = queue) => {
+    async (index, list = queue, recoveryDepth = 0) => {
       const track = list[index]
       if (!track) return
       setQueueIndex(index)
+      setCurrentTrack(track)
       setProgress(0)
       if (user && !isPrivateSession()) recordPlay(user.uid, track)
 
@@ -248,7 +212,13 @@ export function PlayerProvider({ children }) {
         ytPlayerRef.current?.pauseVideo?.()
         const blob = await getLocalSongBlob(track.id)
         if (!blob) {
+          // A local record can outlive its underlying file. Recover instead of
+          // leaving the player stuck on a dead track.
           setIsPlaying(false)
+          if (recoveryDepth < list.length - 1) {
+            const nextIndex = index + 1 < list.length ? index + 1 : 0
+            if (nextIndex !== index) await loadAndPlay(nextIndex, list, recoveryDepth + 1)
+          }
           return
         }
         if (currentObjectUrl.current) URL.revokeObjectURL(currentObjectUrl.current)
@@ -263,6 +233,10 @@ export function PlayerProvider({ children }) {
           await audio.play()
         } catch {
           setIsPlaying(false)
+          if (recoveryDepth < list.length - 1) {
+            const nextIndex = index + 1 < list.length ? index + 1 : 0
+            if (nextIndex !== index) await loadAndPlay(nextIndex, list, recoveryDepth + 1)
+          }
         }
       } else {
         localAudioRef.current?.pause()
@@ -314,22 +288,12 @@ export function PlayerProvider({ children }) {
     })
     try {
       if (duration) {
-        navigator.mediaSession.setPositionState({
-          duration,
-          position: Math.min(progress, duration),
-          playbackRate: 1,
-        })
+        navigator.mediaSession.setPositionState({ duration, position: Math.min(progress, duration), playbackRate: 1 })
       }
-    } catch {
-      // Some browsers throw if position > duration transiently; safe to ignore.
-    }
+    } catch { /* Some browsers throw transiently. */ }
     return () => {
       ;['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((action) => {
-        try {
-          navigator.mediaSession.setActionHandler(action, null)
-        } catch {
-          /* no-op */
-        }
+        try { navigator.mediaSession.setActionHandler(action, null) } catch { /* no-op */ }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -357,18 +321,11 @@ export function PlayerProvider({ children }) {
     }, durationMs)
   }
 
-  useEffect(() => {
-    return () => {
-      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current)
-    }
-  }, [])
-
-  // Public API -----------------------------------------------------------
+  useEffect(() => () => { if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current) }, [])
 
   function resetShuffleOrder(length = queue.length, currentIndex = queueIndex) {
     const indices = []
     for (let i = 0; i < length; i++) if (i !== currentIndex) indices.push(i)
-    // Fisher-Yates: O(n), unbiased, and avoids repeated random picks.
     for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]] }
     shuffleStateRef.current = { order: indices, position: -1 }
   }
@@ -420,7 +377,6 @@ export function PlayerProvider({ children }) {
 
   function playPrevious() {
     if (!queue.length) return
-    // Restart current track if we're more than 3s in (Spotify behavior)
     if (progress > 3) {
       if (isLocal) localAudioRef.current.currentTime = 0
       else ytPlayerRef.current.seekTo(0)
@@ -458,150 +414,36 @@ export function PlayerProvider({ children }) {
     if (localAudioRef.current) localAudioRef.current.volume = next ? 0 : volume / 100
   }
 
-  // Real equivalent of Spotify's "Connect to a device" for Bluetooth
-  // speakers/headphones: this doesn't pair Bluetooth (that's always an
-  // OS-level action, in any app), it lets the user pick which *already
-  // paired/connected* output device audio plays through, from inside the
-  // app — which is what Spotify's own feature actually does under the hood.
-  // Only affects local-file playback: YouTube's audio renders inside its
-  // own cross-origin iframe, which this API has no access to.
-  //
-  // Gated on selectAudioOutput specifically (not just setSinkId): older
-  // Chrome has setSinkId without selectAudioOutput, but picking a device
-  // that way needs mic-permission-gated device labels with no clean UX —
-  // rather than ship a half-working fallback, the button simply doesn't
-  // appear on browsers that lack the full picker.
-  const outputSupported =
-    typeof HTMLMediaElement !== 'undefined' &&
-    'setSinkId' in HTMLMediaElement.prototype &&
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices?.selectAudioOutput
+  const outputSupported = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.selectAudioOutput
 
   async function chooseOutputDevice() {
     if (!outputSupported) return
     try {
       const device = await navigator.mediaDevices.selectAudioOutput()
-      // If the EQ graph is active, audio is routed through
-      // audioCtxRef.current.destination, not the <audio> element directly —
-      // setSinkId has to target whichever one is actually producing output.
-      if (audioCtxRef.current && 'setSinkId' in audioCtxRef.current) {
-        await audioCtxRef.current.setSinkId(device.deviceId)
-      } else {
-        await localAudioRef.current?.setSinkId(device.deviceId)
-      }
+      if (audioCtxRef.current && 'setSinkId' in audioCtxRef.current) await audioCtxRef.current.setSinkId(device.deviceId)
+      else await localAudioRef.current?.setSinkId(device.deviceId)
       setOutputDeviceId(device.deviceId)
       setOutputDeviceLabel(device.label || 'Connected device')
     } catch (err) {
-      if (err.name !== 'NotFoundError' && err.name !== 'NotAllowedError') {
-        console.error('Output device selection failed:', err)
-      }
+      if (err.name !== 'NotFoundError' && err.name !== 'NotAllowedError') console.error('Output device selection failed:', err)
     }
   }
 
-  async function resetOutputDevice() {
-    if (!outputSupported) return
-    await localAudioRef.current?.setSinkId('')
-    setOutputDeviceId(null)
-    setOutputDeviceLabel(null)
-  }
-
-  function enqueue(track) { setQueue((q) => { const next=[...q,track]; if(shuffle) resetShuffleOrder(next.length,queueIndex); return next }) }
-
-  // Insert right after the currently playing track ("Play Next").
-  function playNext_insert(track) { setQueue((q) => { const next=[...q]; next.splice(queueIndex+1,0,track); if(shuffle) resetShuffleOrder(next.length,queueIndex); return next }) }
-
-  function removeFromQueue(index) {
-    setQueue((q) => q.filter((_, i) => i !== index))
-    if (index < queueIndex) setQueueIndex((i) => i - 1)
-  }
-
-  function reorderQueue(fromIndex, toIndex) {
-    setQueue((q) => {
-      const next = [...q]
-      const [moved] = next.splice(fromIndex, 1)
-      next.splice(toIndex, 0, moved)
-      return next
-    })
-    setQueueIndex((i) => {
-      if (fromIndex === i) return toIndex
-      if (fromIndex < i && toIndex >= i) return i - 1
-      if (fromIndex > i && toIndex <= i) return i + 1
-      return i
-    })
-  }
-
-  // Low-frequency context for track rows. It excludes progress/duration so
-  // large lists do not re-render every 500ms.
   const rowPlayTrack = useCallback((track, contextTracks = null) => playTrack(track, contextTracks), [loadAndPlay, shuffle])
-  const rowTogglePlay = useCallback(() => togglePlay(), [isLocal, isPlaying])
-  const rowPlayNextInQueue = useCallback((track) => playNext_insert(track), [queueIndex, shuffle])
-  const rowOpenNowPlaying = useCallback(() => setNowPlayingOpen(true), [])
-  const rowValue = useMemo(() => ({ currentTrackId: currentTrack?.id ?? null, isPlaying, playTrack: rowPlayTrack, togglePlay: rowTogglePlay, playNextInQueue: rowPlayNextInQueue, openNowPlaying: rowOpenNowPlaying }), [currentTrack?.id, isPlaying, rowPlayTrack, rowTogglePlay, rowPlayNextInQueue, rowOpenNowPlaying])
 
-  // Clears everything except the currently playing track (matches Spotify's
-  // "Clear queue" behavior — it doesn't stop what's playing).
-  function clearQueue() {
-    setQueue((q) => (queueIndex >= 0 ? [q[queueIndex]] : []))
-    setQueueIndex(queueIndex >= 0 ? 0 : -1)
-  }
+  const value = useMemo(() => ({
+    queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration,
+    sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal,
+    playTrack, playNext, playPrevious, togglePlay, seekTo, changeVolume, toggleMute, setShuffle, setRepeatMode,
+    setSleepTimer, clearSleepTimer, chooseOutputDevice, setEqBand, applyEqPreset, resetShuffleOrder, setQueue,
+    setQueueIndex, loadAndPlay,
+  }), [queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration,
+    sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, loadAndPlay])
 
-  const value = {
-    queue,
-    queueIndex,
-    currentTrack,
-    isPlaying,
-    progress,
-    duration,
-    volume,
-    muted,
-    shuffle,
-    repeatMode,
-    setVolume: changeVolume,
-    setMuted,
-    setRepeatMode,
-    playerReady: apiReady,
-    playTrack,
-    togglePlay,
-    playNext,
-    playPrevious,
-    seekTo,
-    changeVolume,
-    toggleMute,
-    toggleShuffle: () => setShuffle((s) => { const next=!s; if(next) resetShuffleOrder(queue.length,queueIndex); else shuffleStateRef.current={order:[],position:-1}; return next }),
-    cycleRepeat: () =>
-      setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')),
-    enqueue,
-    playNextInQueue: playNext_insert,
-    removeFromQueue,
-    reorderQueue,
-    clearQueue,
-    // Equalizer — only meaningfully affects playback when isLocal is true.
-    // eqSupported tells the UI whether to disable the controls for the
-    // current track (true for local files, false for YouTube — a real
-    // cross-origin-audio limitation, not a missing feature).
-    eqSupported: isLocal,
-    eqGains,
-    eqPreset,
-    eqBands: EQ_BANDS,
-    eqPresetNames: Object.keys(EQ_PRESETS),
-    setEqBand,
-    applyEqPreset,
-    // Audio output device (Bluetooth/speaker) selection
-    outputSupported,
-    outputDeviceId,
-    outputDeviceLabel,
-    chooseOutputDevice,
-    resetOutputDevice,
-    sleepTimerSeconds,
-    nowPlayingOpen,
-    openNowPlaying: () => setNowPlayingOpen(true),
-    closeNowPlaying: () => setNowPlayingOpen(false),
-    setSleepTimer,
-    clearSleepTimer,
-  }
+  const rowValue = useMemo(() => ({ playTrack: rowPlayTrack, currentTrack, isPlaying }), [rowPlayTrack, currentTrack, isPlaying])
 
   return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={rowValue}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
 }
 
-export function usePlayer() { const ctx=useContext(PlayerContext); if(!ctx) throw new Error('usePlayer must be used within PlayerProvider'); return ctx }
-export function usePlayerRow() { const ctx=useContext(PlayerRowContext); if(!ctx) throw new Error('usePlayerRow must be used within PlayerProvider'); return ctx }
+export function usePlayer() { const ctx = useContext(PlayerContext); if (!ctx) throw new Error('usePlayer must be used within PlayerProvider'); return ctx }
+export function usePlayerRow() { const ctx = useContext(PlayerRowContext); if (!ctx) throw new Error('usePlayerRow must be used within PlayerProvider'); return ctx }
