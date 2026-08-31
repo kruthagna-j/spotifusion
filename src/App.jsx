@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
 import MobileNav from '@/components/MobileNav'
+import ReferenceNowPlaying from '@/components/ReferenceNowPlaying'
 import Home from '@/pages/Home'
 import Search from '@/pages/SearchStable2'
 import LibraryMobile from '@/pages/LibraryMobile'
@@ -43,12 +44,7 @@ export default function App() {
     const onOnline = () => warm()
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('online', onOnline)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('online', onOnline)
-    }
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('online', onOnline) }
   }, [user, online, standalone])
 
   if (authLoading) return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
@@ -78,7 +74,10 @@ export default function App() {
         <Route path="/now-playing" element={<NowPlayingRoute />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </main></div></div><PlayerBar/><MobileNav/>
+    </main></div></div>
+    <PlayerBar/>
+    <ReferenceNowPlaying/>
+    <MobileNav/>
   </div>
 }
 
