@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'com.spotifusion.app'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.spotifusion.app"
@@ -18,9 +18,7 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable false
-            }
+            minifyEnabled false
         }
     }
     compileOptions {
