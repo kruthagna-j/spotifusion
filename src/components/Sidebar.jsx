@@ -56,7 +56,7 @@ export default function Sidebar() {
 }
 
 function NavItem({ to, label, icon, subtitle, end = false }) {
-  return <NavLink to={to} end={end} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${isActive ? 'bg-white/10 text-white shadow-sm' : 'text-text-muted hover:text-white hover:bg-white/5'}`}>
+  return <NavLink to={to} end={end} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${isActive ? 'bg-brand/10 text-brand shadow-sm' : 'text-text-muted hover:text-text hover:bg-white/5'}`}>
     <span className="shrink-0">{icon}</span>
     <span className="min-w-0 flex-1"><span className="block text-sm font-semibold truncate">{label}</span>{subtitle && <span className="block text-[11px] text-text-subdued truncate">{subtitle}</span>}</span>
   </NavLink>
