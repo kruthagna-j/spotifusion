@@ -40,13 +40,16 @@ function normalizeCategoryResults(results,category){
   return results.map(item=>{
     if(!item||typeof item!=='object')return null
     const existing=String(item.resultType||item.type||'').toLowerCase()
-    if(category==='songs' && (existing==='song'||existing==='video'||!existing)) return {...item,resultType:'song'}
-    if(category==='albums' && (existing==='album'||!existing)) return {...item,resultType:'album'}
-    if(category==='artists' && (existing==='artist'||!existing)) return {...item,resultType:'artist'}
-    if(category==='playlists' && (existing==='playlist'||existing==='jukebox'||existing==='mix'||!existing)) return {...item,resultType:existing==='jukebox'||existing==='mix'?'jukebox':'playlist'}
-    if(category==='jukebox' && (existing==='jukebox'||existing==='mix')) return {...item,resultType:'jukebox'}
-    return item
-  }).filter(item=>item&&item.id)
+    const stableId=item.id||item.videoId||item.browseId||item.playlistId||item.albumId||item.artistId
+    if(!stableId)return null
+    const normalized={...item,id:stableId}
+    if(category==='songs' && (existing==='song'||existing==='video'||!existing)) return {...normalized,resultType:'song'}
+    if(category==='albums' && (existing==='album'||!existing)) return {...normalized,resultType:'album'}
+    if(category==='artists' && (existing==='artist'||!existing)) return {...normalized,resultType:'artist'}
+    if(category==='playlists' && (existing==='playlist'||existing==='jukebox'||existing==='mix'||!existing)) return {...normalized,resultType:existing==='jukebox'||existing==='mix'?'jukebox':'playlist'}
+    if(category==='jukebox' && (existing==='jukebox'||existing==='mix')) return {...normalized,resultType:'jukebox'}
+    return normalized
+  }).filter(Boolean)
 }
 
 export async function searchMusicPage(query,{category='all',batch=1,signal}={}){
@@ -56,25 +59,19 @@ export async function searchMusicPage(query,{category='all',batch=1,signal}={}){
 
   const cacheKey=`page:${category}:${batch}:${normalizedKey(q)}`
   const cached=getCached(searchCache,cacheKey,SEARCH_CACHE_TTL)
-  // Never treat a previously cached empty category page as a successful result.
-  // Older deployments could cache an empty filtered response and make the tab
-  // appear blank until the browser was refreshed.
   if(cached && Array.isArray(cached.results) && cached.results.length)return cached
 
   let body=await coalesce(`search-page:${cacheKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&batch=${batch}`,{signal}))
   let results=normalizeCategoryResults(Array.isArray(body?.results)?body.results:[],category)
 
-  // Category-specific YTMusic searches can legitimately return an empty page
-  // while the mixed search for the exact same query contains matching items.
-  // Always fall back to the mixed endpoint, including SONGS. This is what makes
-  // switching tabs work immediately without a browser refresh.
   if(!results.length&&category!=='all'){
     const fallbackKey=`page:all:${batch}:${normalizedKey(q)}`
     const fallback=await coalesce(`search-page:${fallbackKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=all&batch=${batch}`,{signal}))
     const mixed=Array.isArray(fallback?.results)?fallback.results:[]
-    results=filterCategoryResults(mixed,category)
-    // If the provider's mixed response omitted resultType, songs are still
-    // valid playable results. Treat playable video-shaped items as songs.
+    results=filterCategoryResults(mixed,category).map(item=>{
+      const id=item?.id||item?.videoId||item?.browseId||item?.playlistId||item?.albumId||item?.artistId
+      return id ? {...item,id} : null
+    }).filter(Boolean)
     if(category==='songs' && !results.length){
       results=mixed.filter(x=>x?.id||x?.videoId).map(x=>({...x,resultType:'song',id:x.id||x.videoId}))
     }
@@ -82,8 +79,6 @@ export async function searchMusicPage(query,{category='all',batch=1,signal}={}){
   }
 
   const result={results,hasMore:Boolean(body?.hasMore)&&results.length>0,available:Number.isFinite(body?.available)?body.available:results.length,batch:Number(body?.batch||batch),pageSize:Number(body?.pageSize||100),category}
-  // Empty pages are deliberately not cached; a temporary upstream empty page
-  // must not poison the category until TTL expiry.
   if(results.length)setCached(searchCache,cacheKey,result,MAX_SEARCH_CACHE)
   return result
 }
