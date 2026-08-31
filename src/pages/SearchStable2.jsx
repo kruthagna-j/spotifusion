@@ -28,7 +28,7 @@ function EntityCard({ item }) {
   const navigate = useNavigate(); const type = item.resultType
   const Icon = type === 'artist' ? UserRound : type === 'album' ? Disc3 : type === 'jukebox' ? Radio : ListMusic
   const label = type === 'artist' ? 'Artist' : type === 'album' ? 'Album' : type === 'jukebox' ? 'Jukebox' : 'Playlist'
-  const id = item.browseId || item.id; const image = getArtwork(item, 'large')
+  const id = item.browseId || item.id || item.playlistId || item.albumId || item.artistId; const image = getArtwork(item, 'large')
   const path = type === 'artist' ? `/artist/${encodeURIComponent(id)}` : type === 'album' ? `/album/${encodeURIComponent(id)}` : `/youtube-playlist/${encodeURIComponent(id)}`
   return <button type="button" onClick={() => navigate(path, { state: { name: item.title, artwork: image, browseId: id } })} className="sf-entity-card group text-left min-w-0"><div className="relative aspect-square overflow-hidden rounded-2xl bg-surface-highlight mb-3">{image ? <img src={image} alt="" loading="lazy" decoding="async" className={`w-full h-full object-cover ${type === 'artist' ? 'rounded-full' : ''}`} onError={e => { e.currentTarget.style.display = 'none' }}/> : <div className="w-full h-full grid place-items-center"><Icon size={34} className="text-text-subdued"/></div>}</div><p className="font-bold text-sm truncate">{item.title || 'Untitled'}</p><p className="text-xs text-text-muted truncate mt-1">{item.subtitle || item.artist || label}</p><span className="inline-flex items-center gap-1 mt-2 text-[10px] uppercase tracking-wider font-bold text-text-subdued"><Icon size={11}/>{label}</span></button>
 }
@@ -45,22 +45,20 @@ export default function SearchStable2() {
   useEffect(() => { stateRef.current = { results, batch, hasMore } }, [results, batch, hasMore])
 
   const groups = useMemo(() => {
-    const seen = new Set(); const unique = results.filter(item => { const type = item?.resultType || 'song'; const id = item?.id || item?.videoId; const k = `${type}:${id}`; if (!id || seen.has(k)) return false; seen.add(k); return true })
-    return { all: unique, songs: unique.filter(x => x.resultType === 'song' || x.resultType === 'video' || !x.resultType), albums: unique.filter(x => x.resultType === 'album'), artists: unique.filter(x => x.resultType === 'artist'), playlists: unique.filter(x => x.resultType === 'playlist'), jukebox: unique.filter(x => x.resultType === 'jukebox' || x.resultType === 'mix') }
+    const seen = new Set(); const unique = results.filter(item => { const type = item?.resultType || item?.type || 'song'; const id = item?.id || item?.videoId || item?.browseId || item?.playlistId || item?.albumId || item?.artistId; const k = `${type}:${id}`; if (!id || seen.has(k)) return false; seen.add(k); return true })
+    return { all: unique, songs: unique.filter(x => ['song', 'video'].includes(String(x.resultType || x.type || '').toLowerCase()) || !x.resultType && !x.type), albums: unique.filter(x => String(x.resultType || x.type || '').toLowerCase() === 'album'), artists: unique.filter(x => String(x.resultType || x.type || '').toLowerCase() === 'artist'), playlists: unique.filter(x => ['playlist'].includes(String(x.resultType || x.type || '').toLowerCase())), jukebox: unique.filter(x => ['jukebox', 'mix'].includes(String(x.resultType || x.type || '').toLowerCase())) }
   }, [results])
 
   const fetchCategory = useCallback(async (q, nextCategory, nextBatch = 1, replace = true) => {
     if (!user || !online || q.length < 2) return
     const seq = ++requestSeq.current; if (nextBatch === 1) setLoading(true); setError('')
     try {
-      // No AbortSignal is shared between category requests. The sequence number
-      // prevents stale responses while every clicked tab gets its own request.
       let data = await searchMusicPage(q, { category: nextCategory, batch: nextBatch })
       let next = Array.isArray(data?.results) ? data.results : []
       if (!next.length && nextCategory !== 'all') {
         const mixed = await searchMusicPage(q, { category: 'all', batch: nextBatch }); const mixedResults = Array.isArray(mixed?.results) ? mixed.results : []
         const allowed = nextCategory === 'songs' ? new Set(['song', 'video']) : nextCategory === 'albums' ? new Set(['album']) : nextCategory === 'artists' ? new Set(['artist']) : nextCategory === 'playlists' ? new Set(['playlist']) : new Set(['jukebox', 'mix'])
-        next = mixedResults.filter(x => allowed.has(String(x?.resultType || '').toLowerCase()))
+        next = mixedResults.filter(x => allowed.has(String(x?.resultType || x?.type || '').toLowerCase()))
         if (nextCategory === 'songs' && !next.length) next = mixedResults.filter(x => x?.id || x?.videoId).map(x => ({ ...x, id: x.id || x.videoId, resultType: 'song' }))
         data = { ...mixed, category: nextCategory }
       }
@@ -93,7 +91,7 @@ export default function SearchStable2() {
     {history.length > 0 && !query && <div className="mb-6"><div className="flex justify-between mb-2"><span className="text-sm font-semibold">Recent searches</span><button type="button" onClick={() => { localStorage.removeItem(HISTORY_KEY); setHistory([]) }} className="sf-ghost-button"><Trash2 size={14}/> Clear</button></div><div className="flex flex-wrap gap-2">{history.slice(0, 10).map(x => <button key={x} type="button" onClick={() => submit(x)} className="sf-history-chip"><Clock size={12}/>{x}</button>)}</div></div>}
     {loading && <SkeletonRowList count={8}/>} {error && !loading && <div className="flex justify-between items-center gap-3 bg-red-500/10 text-red-300 rounded-xl p-3 mb-4 max-w-3xl"><span className="text-sm">{error}</span><button type="button" onClick={() => fetchCategory(submitted, category, 1, true)} className="sf-ghost-button"><RotateCw size={14}/> Retry</button></div>}
     {!loading && !error && submitted && batch > 0 && !visible.length && <div className="text-center py-16 text-text-muted"><SearchX size={40} className="mx-auto mb-3"/><p>No {label.toLowerCase()} results for “{submitted}”.</p></div>}
-    {visible.length > 0 && <section><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-brand uppercase tracking-widest font-bold">Search results</p><h2 className="text-2xl font-black">{label}</h2></div><span className="text-xs text-text-subdued">{visible.length} loaded</span></div>{category === 'songs' ? <div className="space-y-1">{groups.songs.map((track, index) => <TrackRow key={track.id} track={track} index={index} contextTracks={groups.songs}/>)}</div> : <div className="search-entity-grid">{visible.map(item => <EntityCard key={`${item.resultType}-${item.id}`} item={item}/>)}</div>}</section>}
+    {visible.length > 0 && <section><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-brand uppercase tracking-widest font-bold">Search results</p><h2 className="text-2xl font-black">{label}</h2></div><span className="text-xs text-text-subdued">{visible.length} loaded</span></div>{category === 'songs' ? <div className="space-y-1">{groups.songs.map((track, index) => <TrackRow key={track.id || track.videoId} track={track} index={index} contextTracks={groups.songs}/>)}</div> : <div className="search-entity-grid">{visible.map(item => <EntityCard key={`${item.resultType || item.type || category}-${item.id || item.browseId || item.playlistId || item.albumId || item.artistId}`} item={item}/>)}</div>}</section>}
     {submitted && batch > 0 && <div ref={sentinelRef} className="min-h-16 flex items-center justify-center text-text-subdued">{hasMore && <LoaderCircle size={18} className="animate-spin"/>}</div>}
     {!submitted && history.length === 0 && <div className="py-14 text-center text-text-subdued text-sm">Search for a song, artist, album, playlist or jukebox.</div>}
   </div>
