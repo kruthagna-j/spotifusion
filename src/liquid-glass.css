@@ -59,6 +59,27 @@
 .liquid-glass .bg-yellow-600\/90 { background:#fff2c7!important; color:#6b4e00; }
 .liquid-glass .text-yellow-500 { color:#9a6a00!important; }
 
+/* Desktop sidebar: the active Home item must never inherit white text on the light glass surface. */
+.liquid-glass aside a[aria-current="page"] { color:var(--lg-blue)!important; background:var(--lg-blue-soft)!important; }
+.liquid-glass aside a[aria-current="page"] svg { color:var(--lg-blue)!important; }
+.liquid-glass aside a[aria-current="page"] span { color:inherit!important; }
+.liquid-glass aside a:not([aria-current="page"]) { color:var(--lg-muted); }
+.liquid-glass aside a:not([aria-current="page"]):hover { color:var(--lg-text); background:rgba(255,255,255,.45); }
+
+/* Light-player sliders: explicit native styling avoids white-on-white tracks/thumbs in Chromium. */
+.liquid-glass input[type="range"].volume-slider,
+.liquid-glass input[type="range"].seek-slider { appearance:none!important; -webkit-appearance:none!important; height:20px; background:transparent!important; accent-color:var(--lg-blue)!important; }
+.liquid-glass input[type="range"].volume-slider::-webkit-slider-runnable-track,
+.liquid-glass input[type="range"].seek-slider::-webkit-slider-runnable-track { height:4px; background:rgba(82,91,115,.28)!important; border-radius:999px; }
+.liquid-glass input[type="range"].volume-slider::-webkit-slider-thumb,
+.liquid-glass input[type="range"].seek-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:16px; height:16px; margin-top:-6px; border:2px solid #fff; border-radius:50%; background:var(--lg-blue)!important; box-shadow:0 2px 7px rgba(40,100,240,.35); }
+.liquid-glass input[type="range"].volume-slider::-moz-range-track,
+.liquid-glass input[type="range"].seek-slider::-moz-range-track { height:4px; background:rgba(82,91,115,.28)!important; border-radius:999px; }
+.liquid-glass input[type="range"].volume-slider::-moz-range-progress,
+.liquid-glass input[type="range"].seek-slider::-moz-range-progress { height:4px; background:var(--lg-blue)!important; border-radius:999px; }
+.liquid-glass input[type="range"].volume-slider::-moz-range-thumb,
+.liquid-glass input[type="range"].seek-slider::-moz-range-thumb { width:16px; height:16px; border:2px solid #fff; border-radius:50%; background:var(--lg-blue)!important; box-shadow:0 2px 7px rgba(40,100,240,.35); }
+
 .lg-topbar { border-bottom:1px solid rgba(110,120,160,.08); }
 .lg-mobile-title { font-size:17px; letter-spacing:-.02em; }
 .lg-mobile-back,.lg-mobile-action,.lg-round-button { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; color:var(--lg-text); background:rgba(255,255,255,.6); border:1px solid var(--lg-border); box-shadow:0 5px 15px rgba(75,87,130,.08); }
