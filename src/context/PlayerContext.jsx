@@ -3,16 +3,14 @@ import { useAuth } from './AuthContext'
 import { recordPlay } from '@/lib/library'
 import { getLocalSongBlob } from '@/lib/localMusicDb'
 import { isPrivateSession } from '@/lib/privacySettings'
+import { getYouTubeStream } from '@/lib/streamApi'
 
 const PlayerContext = createContext(null)
 const PlayerRowContext = createContext(null)
 
 // 5-band EQ, standard-ish frequencies. Only applies to local files: YouTube
 // audio plays inside a cross-origin <iframe>, and browsers deliberately
-// block reading/processing audio from a cross-origin source via Web Audio
-// (a security boundary, not a bug) — so there is no technically honest way
-// to apply EQ to YouTube-backed playback. The UI disables EQ for those
-// tracks rather than pretending it works.
+// block reading/processing audio from a cross-origin source via Web Audio.
 export const EQ_BANDS = [60, 230, 910, 3600, 14000]
 export const EQ_PRESETS = {
   Flat: [0, 0, 0, 0, 0],
@@ -51,6 +49,9 @@ export function PlayerProvider({ children }) {
   const shuffleStateRef = useRef({ order: [], position: -1 })
   const audioCtxRef = useRef(null)
   const eqFiltersRef = useRef(null)
+  const streamAbortRef = useRef(null)
+  const directFallbackAttemptedRef = useRef(null)
+  const [playbackMode, setPlaybackMode] = useState('youtube')
 
   const savedPlayerState = (() => {
     try { return JSON.parse(localStorage.getItem('spotifusion:player-state:v2') || 'null') || {} } catch { return {} }
@@ -75,12 +76,14 @@ export function PlayerProvider({ children }) {
 
   const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
   const isLocal = currentTrack?.source === 'local'
+  const isDirectStream = playbackMode === 'direct' && !isLocal
 
   useEffect(() => {
     try { localStorage.setItem('spotifusion:player-state:v2', JSON.stringify({ queue, queueIndex, volume, muted, shuffle, repeatMode })) } catch {}
   }, [queue, queueIndex, volume, muted, shuffle, repeatMode])
 
   const handleEndedRef = useRef(() => {})
+  const fallbackToDirectRef = useRef(async () => false)
 
   function ensureEqGraph() {
     if (eqFiltersRef.current) return
@@ -116,12 +119,26 @@ export function PlayerProvider({ children }) {
     const onEnded = () => handleEndedRef.current()
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
+    const onLoadedMetadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+    const onError = async () => {
+      if (playbackMode !== 'direct' || !currentTrack?.id) return
+      setIsPlaying(false)
+      // A signed media URL can expire or be rejected. Retry through YouTube once;
+      // the YouTube error handler can then try yt-dlp again if necessary.
+      if (directFallbackAttemptedRef.current === currentTrack.id) return
+      directFallbackAttemptedRef.current = currentTrack.id
+      setPlaybackMode('youtube')
+      try { ytPlayerRef.current?.loadVideoById(currentTrack.id) } catch {}
+    }
     audio.addEventListener('ended', onEnded); audio.addEventListener('play', onPlay); audio.addEventListener('pause', onPause)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata); audio.addEventListener('error', onError)
     return () => {
       audio.removeEventListener('ended', onEnded); audio.removeEventListener('play', onPlay); audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata); audio.removeEventListener('error', onError)
       audio.pause(); if (currentObjectUrl.current) URL.revokeObjectURL(currentObjectUrl.current)
+      streamAbortRef.current?.abort()
     }
-  }, [])
+  }, [playbackMode, currentTrack?.id])
 
   useEffect(() => {
     if (!apiReady || ytPlayerRef.current) return
@@ -136,19 +153,49 @@ export function PlayerProvider({ children }) {
         onReady: (e) => e.target.setVolume(volume),
         onStateChange: (e) => {
           const YTState = window.YT.PlayerState
-          if (e.data === YTState.PLAYING) setIsPlaying(true)
+          if (e.data === YTState.PLAYING) { setPlaybackMode('youtube'); setIsPlaying(true) }
           if (e.data === YTState.PAUSED) setIsPlaying(false)
           if (e.data === YTState.ENDED) handleEndedRef.current()
         },
+        onError: () => { fallbackToDirectRef.current() },
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiReady])
 
+  fallbackToDirectRef.current = async () => {
+    const track = currentTrack
+    if (!track || track.source === 'local' || !track.id) return false
+    if (directFallbackAttemptedRef.current === track.id) return false
+    directFallbackAttemptedRef.current = track.id
+    streamAbortRef.current?.abort()
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+    try {
+      const stream = await getYouTubeStream(track.id, { signal: controller.signal })
+      if (controller.signal.aborted || queue[queueIndex]?.id !== track.id) return false
+      ytPlayerRef.current?.pauseVideo?.()
+      const audio = localAudioRef.current
+      audio.pause()
+      audio.src = stream.url
+      audio.currentTime = 0
+      audio.volume = muted ? 0 : volume / 100
+      setPlaybackMode('direct')
+      setProgress(0)
+      setDuration(Number.isFinite(stream.durationSeconds) ? stream.durationSeconds : 0)
+      await audio.play()
+      return true
+    } catch (err) {
+      if (!controller.signal.aborted) console.warn('yt-dlp playback fallback failed:', err)
+      if (!controller.signal.aborted && queue[queueIndex]?.id === track.id) setPlaybackMode('youtube')
+      return false
+    }
+  }
+
   function handleEnded() {
     if (repeatMode === 'one') {
-      if (isLocal) { localAudioRef.current.currentTime = 0; localAudioRef.current.play() }
-      else { ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo() }
+      if (isLocal || isDirectStream) { localAudioRef.current.currentTime = 0; localAudioRef.current.play() }
+      else { ytPlayerRef.current?.seekTo(0); ytPlayerRef.current?.playVideo() }
       return
     }
     playNext()
@@ -158,23 +205,24 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     clearInterval(progressTimer.current)
     if (isPlaying) progressTimer.current = setInterval(() => {
-      if (isLocal) { setProgress(localAudioRef.current?.currentTime || 0); setDuration(localAudioRef.current?.duration || 0) }
+      if (isLocal || isDirectStream) { setProgress(localAudioRef.current?.currentTime || 0); setDuration(localAudioRef.current?.duration || duration || 0) }
       else { setProgress(ytPlayerRef.current?.getCurrentTime?.() || 0); setDuration(ytPlayerRef.current?.getDuration?.() || 0) }
     }, 500)
     return () => clearInterval(progressTimer.current)
-  }, [isPlaying, isLocal])
+  }, [isPlaying, isLocal, isDirectStream, duration])
 
   const loadAndPlay = useCallback(async (index, list = queue) => {
     const track = list[index]
     if (!track) return
-    setQueueIndex(index); setProgress(0)
+    streamAbortRef.current?.abort()
+    directFallbackAttemptedRef.current = null
+    setQueueIndex(index); setProgress(0); setDuration(0)
     if (track.source === 'local') {
+      setPlaybackMode('local')
       ytPlayerRef.current?.pauseVideo?.()
       const blob = await getLocalSongBlob(track.id)
       if (!blob) {
         setIsPlaying(false)
-        // Missing local files should not strand the queue. Try the next item;
-        // stop at the end unless repeat-all is enabled.
         const nextIndex = index + 1 < list.length ? index + 1 : (repeatMode === 'all' ? 0 : -1)
         if (nextIndex >= 0 && nextIndex !== index) await loadAndPlay(nextIndex, list)
         return
@@ -185,12 +233,13 @@ export function PlayerProvider({ children }) {
       const audio = localAudioRef.current; audio.src = url; audio.volume = muted ? 0 : volume / 100
       try { ensureEqGraph(); await audioCtxRef.current?.resume(); await audio.play() } catch { setIsPlaying(false) }
     } else {
+      setPlaybackMode('youtube')
       localAudioRef.current?.pause()
       if (!ytPlayerRef.current?.loadVideoById) return
       ytPlayerRef.current.loadVideoById(track.id); ytPlayerRef.current.setVolume(muted ? 0 : volume); setIsPlaying(true)
       if (user && !isPrivateSession()) recordPlay(user.uid, track)
     }
-  }, [queue, queueIndex, muted, volume, user, repeatMode])
+  }, [queue, muted, volume, user, repeatMode])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
@@ -214,7 +263,7 @@ export function PlayerProvider({ children }) {
   function setSleepTimer(seconds) {
     clearSleepTimer(); if (!seconds) return
     setSleepTimerSeconds(seconds)
-    sleepTimerRef.current = setTimeout(() => { if (isLocal) localAudioRef.current?.pause(); else ytPlayerRef.current?.pauseVideo?.(); setIsPlaying(false); setSleepTimerSeconds(null); sleepTimerRef.current = null }, seconds * 1000)
+    sleepTimerRef.current = setTimeout(() => { if (isLocal || isDirectStream) localAudioRef.current?.pause(); else ytPlayerRef.current?.pauseVideo?.(); setIsPlaying(false); setSleepTimerSeconds(null); sleepTimerRef.current = null }, seconds * 1000)
   }
   useEffect(() => () => { if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current) }, [])
 
@@ -229,7 +278,7 @@ export function PlayerProvider({ children }) {
     setQueue(list); if (shuffle) resetShuffleOrder(list.length, nextIndex); else shuffleStateRef.current = { order: [], position: -1 }; loadAndPlay(nextIndex, list)
   }
   function togglePlay() {
-    if (isLocal) { if (!localAudioRef.current?.src) return; if (isPlaying) localAudioRef.current.pause(); else localAudioRef.current.play(); return }
+    if (isLocal || isDirectStream) { if (!localAudioRef.current?.src) return; if (isPlaying) localAudioRef.current.pause(); else localAudioRef.current.play(); return }
     if (!ytPlayerRef.current) return; if (isPlaying) ytPlayerRef.current.pauseVideo(); else ytPlayerRef.current.playVideo()
   }
   function playNext() {
@@ -244,12 +293,12 @@ export function PlayerProvider({ children }) {
   }
   function playPrevious() {
     if (!queue.length) return
-    if (progress > 3) { if (isLocal) localAudioRef.current.currentTime = 0; else ytPlayerRef.current.seekTo(0); setProgress(0); return }
+    if (progress > 3) { if (isLocal || isDirectStream) localAudioRef.current.currentTime = 0; else ytPlayerRef.current?.seekTo(0); setProgress(0); return }
     if (shuffle) { const state = shuffleStateRef.current; if (state.position > 0) { state.position -= 1; loadAndPlay(state.order[state.position]); return } }
     const prevIndex = queueIndex - 1 < 0 ? (repeatMode === 'all' ? queue.length - 1 : 0) : queueIndex - 1
     loadAndPlay(prevIndex)
   }
-  function seekTo(seconds) { if (isLocal) { if (localAudioRef.current) localAudioRef.current.currentTime = seconds } else ytPlayerRef.current?.seekTo(seconds, true); setProgress(seconds) }
+  function seekTo(seconds) { if (isLocal || isDirectStream) { if (localAudioRef.current) localAudioRef.current.currentTime = seconds } else ytPlayerRef.current?.seekTo(seconds, true); setProgress(seconds) }
   function changeVolume(v) { setVolume(v); setMuted(false); ytPlayerRef.current?.setVolume(v); if (localAudioRef.current) localAudioRef.current.volume = v / 100 }
   function toggleMute() { const next = !muted; setMuted(next); ytPlayerRef.current?.setVolume(next ? 0 : volume); if (localAudioRef.current) localAudioRef.current.volume = next ? 0 : volume / 100 }
 
@@ -272,9 +321,10 @@ export function PlayerProvider({ children }) {
     setQueue(nextQueue); if (nextIndex >= 0) setQueueIndex(nextIndex); if (shuffle) resetShuffleOrder(nextQueue.length, nextIndex)
   }
   function clearQueue() {
+    streamAbortRef.current?.abort()
     localAudioRef.current?.pause(); ytPlayerRef.current?.pauseVideo?.()
     if (currentObjectUrl.current) { URL.revokeObjectURL(currentObjectUrl.current); currentObjectUrl.current = null }
-    setQueue([]); setQueueIndex(-1); setProgress(0); setDuration(0); setIsPlaying(false); shuffleStateRef.current = { order: [], position: -1 }
+    setQueue([]); setQueueIndex(-1); setProgress(0); setDuration(0); setIsPlaying(false); setPlaybackMode('youtube'); shuffleStateRef.current = { order: [], position: -1 }
   }
 
   const outputSupported = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.selectAudioOutput
@@ -290,6 +340,7 @@ export function PlayerProvider({ children }) {
 
   const value = useMemo(() => ({
     queue, queueIndex, currentTrack, isPlaying, progress, duration, volume, muted, shuffle, repeatMode,
+    playbackMode, isDirectStream,
     setVolume: changeVolume, setMuted, setRepeatMode, removeFromQueue, reorderQueue, clearQueue,
     playerReady: apiReady, playTrack, togglePlay, playNext, playPrevious, seekTo, changeVolume, toggleMute,
     toggleShuffle: () => setShuffle((s) => { const next = !s; if (next) resetShuffleOrder(queue.length, queueIndex); else shuffleStateRef.current = { order: [], position: -1 }; return next }),
@@ -297,7 +348,7 @@ export function PlayerProvider({ children }) {
     eqSupported: isLocal, eqGains, eqPreset, eqBands: EQ_BANDS, eqPresetNames: Object.keys(EQ_PRESETS), setEqBand, applyEqPreset,
     outputSupported, outputDeviceId, outputDeviceLabel, chooseOutputDevice, sleepTimerSeconds, nowPlayingOpen,
     openNowPlaying: () => setNowPlayingOpen(true), closeNowPlaying: () => setNowPlayingOpen(false), setSleepTimer, clearSleepTimer,
-  }), [queue, queueIndex, currentTrack, isPlaying, progress, duration, volume, muted, shuffle, repeatMode, eqGains, eqPreset, outputSupported, outputDeviceId, outputDeviceLabel, sleepTimerSeconds, nowPlayingOpen, apiReady, isLocal])
+  }), [queue, queueIndex, currentTrack, isPlaying, progress, duration, volume, muted, shuffle, repeatMode, playbackMode, isDirectStream, eqGains, eqPreset, outputSupported, outputDeviceId, outputDeviceLabel, sleepTimerSeconds, nowPlayingOpen, apiReady, isLocal])
 
   return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={{ currentTrackId: currentTrack?.id ?? null, isPlaying, playTrack, togglePlay, openNowPlaying: () => setNowPlayingOpen(true) }}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
 }
