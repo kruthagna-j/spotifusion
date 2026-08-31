@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Play, Shuffle, ListMusic } from 'lucide-react'
+import { ArrowLeft, Play, Shuffle, ListMusic, RotateCcw } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getPlaylist } from '@/lib/musicApi'
 import { useAuth } from '@/context/AuthContext'
@@ -21,6 +21,7 @@ export default function YouTubePlaylist() {
   const [data, setData] = useState({ name: state.name || 'Playlist', artwork: state.artwork || null, description: '', tracks: state.tracks || [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     if (!user) { setLoading(false); return }
@@ -50,11 +51,11 @@ export default function YouTubePlaylist() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, id])
+  }, [user, id, retryKey])
 
   if (!user) return <div className="p-6 text-center"><h1 className="text-xl font-black">Sign in to open playlists</h1><button onClick={() => navigate('/search')} className="mt-5 bg-brand text-black font-bold px-5 py-2.5 rounded-full">Back to Search</button></div>
   if (loading) return <div className="p-5 md:p-7"><div className="sf-panel h-52 animate-pulse"/></div>
-  if (error) return <div className="p-5 md:p-7"><div className="sf-panel p-6 text-center text-text-muted">{error}<div><Link to="/search" className="inline-flex mt-5 bg-brand text-black font-bold px-5 py-2.5 rounded-full">Back to Search</Link></div></div></div>
+  if (error) return <div className="p-5 md:p-7"><div className="sf-panel p-6 text-center text-text-muted"><p>{error}</p><div className="flex flex-wrap items-center justify-center gap-3 mt-5"><button type="button" onClick={() => setRetryKey((value) => value + 1)} className="inline-flex items-center gap-2 bg-brand text-black font-bold px-5 py-2.5 rounded-full"><RotateCcw size={16}/> Retry</button><Link to="/search" className="inline-flex items-center bg-white/10 font-bold px-5 py-2.5 rounded-full">Back to Search</Link></div></div></div>
 
   const tracks = data.tracks || []
   return <div className="p-4 md:p-7 max-w-6xl mx-auto min-w-0 overflow-x-hidden">
