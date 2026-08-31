@@ -1,0 +1,153 @@
+:root {
+  --lg-bg: #f6f7ff;
+  --lg-surface: rgba(255,255,255,.72);
+  --lg-surface-strong: rgba(255,255,255,.88);
+  --lg-border: rgba(110,120,160,.16);
+  --lg-text: #121521;
+  --lg-muted: #697084;
+  --lg-blue: #2864f0;
+  --lg-blue-soft: rgba(40,100,240,.12);
+  --lg-shadow: 0 12px 34px rgba(79,92,137,.13), inset 0 1px 0 rgba(255,255,255,.8);
+}
+
+.liquid-glass {
+  --color-bg: var(--lg-bg);
+  --color-surface: rgba(255,255,255,.68);
+  --color-surface-elevated: rgba(255,255,255,.88);
+  --color-surface-hover: rgba(255,255,255,.96);
+  --color-surface-highlight: rgba(238,241,250,.9);
+  --color-border: var(--lg-border);
+  --color-brand: var(--lg-blue);
+  --color-brand-hover: #1d55d6;
+  --color-text: var(--lg-text);
+  --color-text-muted: var(--lg-muted);
+  --color-text-subdued: #7d8497;
+  color: var(--lg-text);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(145,176,255,.22), transparent 28%),
+    radial-gradient(circle at 88% 72%, rgba(194,181,255,.18), transparent 30%),
+    linear-gradient(135deg,#fafaff 0%,#f1f3fb 48%,#f8f8ff 100%);
+}
+
+.liquid-glass main { background: transparent; }
+.liquid-glass .sf-panel,
+.liquid-glass .sf-settings-section,
+.liquid-glass .sf-account-card,
+.liquid-glass .sf-storage-card {
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-border);
+  box-shadow: var(--lg-shadow);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.liquid-glass .sf-panel { border-radius: 22px; }
+.liquid-glass .sf-chip,
+.liquid-glass .sf-history-chip,
+.liquid-glass .icon-button {
+  background: rgba(255,255,255,.62);
+  color: var(--lg-muted);
+  border-color: var(--lg-border);
+  box-shadow: 0 4px 14px rgba(75,87,130,.07);
+}
+.liquid-glass .sf-chip:hover,
+.liquid-glass .sf-history-chip:hover,
+.liquid-glass .icon-button:hover { background: rgba(255,255,255,.9); color: var(--lg-text); }
+
+.liquid-glass .sf-hero {
+  background: linear-gradient(135deg,rgba(255,255,255,.82),rgba(232,237,255,.75));
+  border: 1px solid var(--lg-border);
+  box-shadow: var(--lg-shadow);
+  color: var(--lg-text);
+}
+.liquid-glass .sf-hero .text-text-muted { color: var(--lg-muted); }
+.liquid-glass .sf-primary-button { background: var(--lg-blue); color: white; box-shadow: 0 8px 20px rgba(40,100,240,.22); }
+.liquid-glass .sf-secondary-button { background: rgba(255,255,255,.72); color: var(--lg-text); border: 1px solid var(--lg-border); }
+.liquid-glass .sf-secondary-button:hover { background: white; }
+
+.liquid-glass .search-category-tabs {
+  width: 100%; max-width: none; padding: 6px; margin-bottom: 22px;
+  background: rgba(255,255,255,.58); border: 1px solid var(--lg-border);
+  border-radius: 20px; box-shadow: var(--lg-shadow); backdrop-filter: blur(22px);
+}
+.liquid-glass .search-category-tab { min-height: 48px; border-radius: 15px; color: #777d8e; }
+.liquid-glass .search-category-tab:hover { background: rgba(255,255,255,.72); color: var(--lg-text); }
+.liquid-glass .search-category-tab.is-active { background: #fff; color: var(--lg-blue); box-shadow: 0 6px 18px rgba(75,87,130,.12); }
+
+.liquid-glass input[type="text"],
+.liquid-glass input[type="search"] { background: rgba(255,255,255,.78) !important; color: var(--lg-text) !important; border: 1px solid var(--lg-border); box-shadow: 0 7px 22px rgba(75,87,130,.08); }
+.liquid-glass .sf-search-button { background: #111521; color: white; box-shadow: 0 6px 16px rgba(18,21,33,.16); }
+
+.liquid-glass .music-card-row > button,
+.liquid-glass .sf-entity-card { border-radius: 18px; }
+.liquid-glass .music-card-row > button:hover { transform: translateY(-2px); }
+.liquid-glass .music-card-row img,
+.liquid-glass .sf-entity-card img { box-shadow: 0 9px 24px rgba(61,72,113,.13); }
+
+.liquid-glass .mobile-bottom-nav-inner {
+  background: rgba(255,255,255,.82);
+  border: 1px solid var(--lg-border);
+  border-bottom: 0;
+  box-shadow: 0 -10px 30px rgba(74,87,130,.10);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+.liquid-glass .mobile-tab { color: #858b9d; }
+.liquid-glass .mobile-tab.is-active { color: var(--lg-blue); }
+.liquid-glass .mobile-tab.is-active .mobile-tab-icon { background: var(--lg-blue-soft); }
+
+.liquid-glass .mobile-mini-player-card {
+  background: rgba(255,255,255,.82); color: var(--lg-text); border-color: var(--lg-border);
+  box-shadow: 0 10px 28px rgba(74,87,130,.15); backdrop-filter: blur(22px);
+}
+.liquid-glass .control-button { color: #697084; }
+.liquid-glass .control-button:hover { color: var(--lg-text); background: rgba(40,100,240,.08); }
+.liquid-glass .control-button.is-active { color: var(--lg-blue); background: var(--lg-blue-soft); }
+.liquid-glass .control-button-play { background: var(--lg-blue); color: white; box-shadow: 0 9px 24px rgba(40,100,240,.25); }
+.liquid-glass .control-button-play:hover { background: var(--lg-blue); color: white; }
+
+.liquid-glass .sf-settings-heading { color: var(--lg-text); }
+.liquid-glass .sf-settings-content { border-top-color: var(--lg-border); }
+.liquid-glass .sf-setting-row { border-bottom-color: rgba(110,120,160,.11); }
+.liquid-glass .sf-setting-choice { background: rgba(255,255,255,.65); color: var(--lg-muted); border-color: var(--lg-border); }
+.liquid-glass .sf-setting-choice.is-active { background: var(--lg-blue); color: white; border-color: var(--lg-blue); }
+.liquid-glass .sf-setting-toggle.is-on { background: var(--lg-blue); }
+
+/* Reference-style Now Playing: soft glass sheet, record player and blue controls. */
+.liquid-glass .fixed.inset-0.z-\[80px\] {
+  background: rgba(246,247,255,.94) !important;
+  color: var(--lg-text);
+  backdrop-filter: blur(28px) saturate(145%);
+}
+.liquid-glass .fixed.inset-0.z-\[80px\] header { border-bottom-color: var(--lg-border); }
+.liquid-glass .fixed.inset-0.z-\[80px\] .now-playing-artwork {
+  border-radius: 50%;
+  padding: 15%;
+  background: radial-gradient(circle,#222 0 56%,#0c0c0c 57% 71%,#252525 72% 100%);
+  box-shadow: 0 22px 48px rgba(39,45,72,.22), 0 0 0 2px rgba(105,126,255,.38), 0 0 0 9px rgba(255,255,255,.35);
+}
+.liquid-glass .fixed.inset-0.z-\[80px\] .now-playing-artwork img { border-radius: 50%; box-shadow: none; }
+.liquid-glass .fixed.inset-0.z-\[80px\] .now-playing-side { background: rgba(255,255,255,.5); border-color: var(--lg-border); box-shadow: var(--lg-shadow); }
+.liquid-glass .fixed.inset-0.z-\[80px\] .bg-white\/\[0\.04\] { background: rgba(255,255,255,.55); }
+.liquid-glass .fixed.inset-0.z-\[80px\] .text-white { color: var(--lg-text) !important; }
+.liquid-glass .fixed.inset-0.z-\[80px\] .text-text-muted,
+.liquid-glass .fixed.inset-0.z-\[80px\] .text-text-subdued { color: var(--lg-muted); }
+.liquid-glass .fixed.inset-0.z-\[80px\] .border-white\/10 { border-color: var(--lg-border); }
+.liquid-glass .fixed.inset-0.z-\[80px\] .control-button-play { background: var(--lg-blue); }
+
+.liquid-glass .skeleton { background: rgba(220,225,240,.7); }
+.liquid-glass .bg-yellow-600\/90 { background: #fff2c7 !important; color: #6b4e00; }
+.liquid-glass .text-yellow-500 { color: #9a6a00 !important; }
+
+@media (max-width: 767px) {
+  .liquid-glass { background: #f5f6fc; }
+  .liquid-glass main { padding-top: 0; }
+  .liquid-glass .mobile-bottom-nav-inner { min-height: 70px; border-radius: 22px 22px 0 0; }
+  .liquid-glass .mobile-mini-player-card { border-radius: 18px; padding: 8px; }
+  .liquid-glass .search-category-tabs { border-radius: 18px; }
+  .liquid-glass .search-category-tab { min-width: 78px; min-height: 42px; font-size: 11px; padding-inline: 9px; }
+  .liquid-glass .music-card-row { gap: 10px; }
+}
+
+@media (max-width: 380px) {
+  .liquid-glass .search-category-tab { min-width: 74px; }
+}
