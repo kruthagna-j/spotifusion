@@ -1,5 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { getLocalSongBlob } from '../lib/localMusicDb'
 import { recordPlay } from '../lib/library'
 import { isPrivateSession } from '../lib/privacySettings'
@@ -204,7 +203,6 @@ export function PlayerProvider({ children }) {
       const track = list[index]
       if (!track) return
       setQueueIndex(index)
-      setCurrentTrack(track)
       setProgress(0)
       if (user && !isPrivateSession()) recordPlay(user.uid, track)
 
@@ -233,6 +231,7 @@ export function PlayerProvider({ children }) {
           await audio.play()
         } catch {
           setIsPlaying(false)
+          // Autoplay/media errors should not leave a local queue stuck.
           if (recoveryDepth < list.length - 1) {
             const nextIndex = index + 1 < list.length ? index + 1 : 0
             if (nextIndex !== index) await loadAndPlay(nextIndex, list, recoveryDepth + 1)
@@ -287,10 +286,8 @@ export function PlayerProvider({ children }) {
       if (details.seekTime != null) seekTo(details.seekTime)
     })
     try {
-      if (duration) {
-        navigator.mediaSession.setPositionState({ duration, position: Math.min(progress, duration), playbackRate: 1 })
-      }
-    } catch { /* Some browsers throw transiently. */ }
+      if (duration) navigator.mediaSession.setPositionState({ duration, position: Math.min(progress, duration), playbackRate: 1 })
+    } catch { /* no-op */ }
     return () => {
       ;['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((action) => {
         try { navigator.mediaSession.setActionHandler(action, null) } catch { /* no-op */ }
@@ -310,7 +307,6 @@ export function PlayerProvider({ children }) {
   function setSleepTimer(seconds) {
     clearSleepTimer()
     if (!seconds) return
-    const durationMs = seconds * 1000
     setSleepTimerSeconds(seconds)
     sleepTimerRef.current = setTimeout(() => {
       if (isLocal) localAudioRef.current?.pause()
@@ -318,7 +314,7 @@ export function PlayerProvider({ children }) {
       setIsPlaying(false)
       setSleepTimerSeconds(null)
       sleepTimerRef.current = null
-    }, durationMs)
+    }, seconds * 1000)
   }
 
   useEffect(() => () => { if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current) }, [])
@@ -431,15 +427,7 @@ export function PlayerProvider({ children }) {
 
   const rowPlayTrack = useCallback((track, contextTracks = null) => playTrack(track, contextTracks), [loadAndPlay, shuffle])
 
-  const value = useMemo(() => ({
-    queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration,
-    sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal,
-    playTrack, playNext, playPrevious, togglePlay, seekTo, changeVolume, toggleMute, setShuffle, setRepeatMode,
-    setSleepTimer, clearSleepTimer, chooseOutputDevice, setEqBand, applyEqPreset, resetShuffleOrder, setQueue,
-    setQueueIndex, loadAndPlay,
-  }), [queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration,
-    sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, loadAndPlay])
-
+  const value = useMemo(() => ({ queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration, sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, playTrack, playNext, playPrevious, togglePlay, seekTo, changeVolume, toggleMute, setShuffle, setRepeatMode, setSleepTimer, clearSleepTimer, chooseOutputDevice, setEqBand, applyEqPreset, resetShuffleOrder, setQueue, setQueueIndex, loadAndPlay }), [queue, queueIndex, currentTrack, isPlaying, volume, muted, shuffle, repeatMode, progress, duration, sleepTimerSeconds, outputSupported, outputDeviceId, outputDeviceLabel, eqGains, eqPreset, isLocal, loadAndPlay])
   const rowValue = useMemo(() => ({ playTrack: rowPlayTrack, currentTrack, isPlaying }), [rowPlayTrack, currentTrack, isPlaying])
 
   return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={rowValue}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
