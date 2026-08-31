@@ -1,7 +1,8 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-ytmusicapi==1.9.1
+yt-music-api==1.9.1
 redis==5.2.1
 slowapi==0.1.9
 pyjwt[crypto]==2.9.0
 requests==2.32.3
+yt-dlp
