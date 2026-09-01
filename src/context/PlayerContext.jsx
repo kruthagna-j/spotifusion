@@ -221,10 +221,21 @@ export function PlayerProvider({ children }) {
       setPlaybackMode('local')
       ytPlayerRef.current?.pauseVideo?.()
       const blob = await getLocalSongBlob(track.id)
+      // A local file can disappear or lose permission after the queue was saved.
+      // Skip it rather than leaving a non-playable track selected in the player.
       if (!blob) {
         setIsPlaying(false)
-        const nextIndex = index + 1 < list.length ? index + 1 : (repeatMode === 'all' ? 0 : -1)
-        if (nextIndex >= 0 && nextIndex !== index) await loadAndPlay(nextIndex, list)
+        const nextIndex = index + 1 < list.length ? index + 1 : (repeatMode === 'all' && list.length ? 0 : -1)
+        if (nextIndex >= 0 && nextIndex !== index) {
+          await loadAndPlay(nextIndex, list)
+        } else {
+          localAudioRef.current?.pause()
+          if (currentObjectUrl.current) { URL.revokeObjectURL(currentObjectUrl.current); currentObjectUrl.current = null }
+          setQueueIndex(-1)
+          setProgress(0)
+          setDuration(0)
+          setPlaybackMode('youtube')
+        }
         return
       }
       if (user && !isPrivateSession()) recordPlay(user.uid, track)
