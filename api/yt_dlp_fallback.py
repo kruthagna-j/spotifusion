@@ -5,7 +5,10 @@ YouTube Music metadata/playback extraction needs a fallback.
 """
 from __future__ import annotations
 
+import base64
 import logging
+import os
+import tempfile
 from typing import Any, Optional
 
 logger = logging.getLogger("spotifusion.ytdlp")
@@ -19,6 +22,29 @@ def _load_yt_dlp():
         return None
 
 
+def _cookie_file() -> tuple[Optional[str], Optional[tempfile.NamedTemporaryFile]]:
+    """Materialize optional Render-provided YouTube cookies for yt-dlp.
+
+    The secret is supplied as base64 in YTDLP_COOKIES_B64 so it never needs to
+    be committed to Git. The temporary file is deleted after each extraction.
+    """
+    encoded = os.getenv("YTDLP_COOKIES_B64", "").strip()
+    if not encoded:
+        return None, None
+    try:
+        data = base64.b64decode(encoded, validate=True)
+        if not data:
+            return None, None
+        tmp = tempfile.NamedTemporaryFile(prefix="spotifusion-cookies-", suffix=".txt", delete=False)
+        tmp.write(data)
+        tmp.flush()
+        tmp.close()
+        return tmp.name, tmp
+    except Exception as exc:
+        logger.error("Could not decode YTDLP_COOKIES_B64: %s", exc)
+        return None, None
+
+
 def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
     """Pick an actual playable HTTP(S) URL from yt-dlp output."""
     direct = info.get("url")
@@ -27,8 +53,6 @@ def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
 
     formats = info.get("formats") or []
 
-    # Prefer direct audio-only URLs. Exclude manifest-only entries because the
-    # browser player expects a normal media URL, not an m3u8/mpd manifest.
     audio_only = [
         f for f in formats
         if f.get("url")
@@ -43,10 +67,6 @@ def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
         )
         return audio_only[0].get("url")
 
-    # Progressive formats are useful as a browser-audio fallback. YouTube's
-    # format 18 is currently exposed by the android_vr client without a GVS
-    # PO token and contains both video and audio, so it can be played by an
-    # HTMLAudioElement even though the app only uses its audio track.
     progressive = [
         f for f in formats
         if f.get("url")
@@ -70,7 +90,16 @@ def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
 
 
 def _extract_with_options(yt_dlp, video_id: str, opts: dict[str, Any]) -> Optional[dict[str, Any]]:
+    cookie_path = None
+    cookie_tmp = None
     try:
+        cookie_path, cookie_tmp = _cookie_file()
+        if cookie_path:
+            opts = {**opts, "cookiefile": cookie_path}
+            user_agent = os.getenv("YTDLP_USER_AGENT", "").strip()
+            if user_agent:
+                opts["http_headers"] = {"User-Agent": user_agent}
+
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(
                 f"https://www.youtube.com/watch?v={video_id}",
@@ -80,6 +109,11 @@ def _extract_with_options(yt_dlp, video_id: str, opts: dict[str, Any]) -> Option
                 return None
             audio_url = _pick_audio_url(info)
             if not audio_url:
+                logger.warning(
+                    "yt-dlp returned no direct playable format for %s (formats=%s)",
+                    video_id,
+                    [f.get("format_id") for f in (info.get("formats") or [])],
+                )
                 return None
             return {
                 "id": info.get("id") or video_id,
@@ -90,8 +124,14 @@ def _extract_with_options(yt_dlp, video_id: str, opts: dict[str, Any]) -> Option
                 "source": "youtube-ytdlp",
             }
     except Exception as exc:
-        logger.warning("yt-dlp extraction attempt failed for %s: %s", video_id, exc)
+        logger.warning("yt-dlp extraction failed for %s: %s", video_id, exc)
         return None
+    finally:
+        if cookie_tmp and cookie_path:
+            try:
+                os.unlink(cookie_path)
+            except OSError:
+                pass
 
 
 def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
@@ -102,17 +142,17 @@ def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
 
     common = {
         "quiet": True,
-        "no_warnings": True,
+        "no_warnings": False,
         "skip_download": True,
         "noplaylist": True,
         "socket_timeout": 12,
         "retries": 1,
     }
 
-    # Current YouTube PO-token enforcement makes many of the normal clients
-    # expose only SABR/HLS formats. As of Aug 2026, android_vr still exposes
-    # progressive format 18 without a GVS PO token. Try that first because it
-    # gives the browser a real HTTP media URL rather than a manifest.
+    # If YTDLP_COOKIES_B64 is configured on Render, yt-dlp uses that browser
+    # session to pass YouTube's bot/login check. Without it we still try the
+    # no-cookie clients first, so public playback continues to work when the
+    # Render IP is not challenged.
     android_vr = {
         **common,
         "format": "18/best",
@@ -123,8 +163,6 @@ def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
         logger.info("Using android_vr playback fallback for %s", video_id)
         return result
 
-    # Keep yt-dlp's maintained default client selection as the second attempt;
-    # this may provide a higher-quality direct audio URL when YouTube allows it.
     default = {
         **common,
         "format": "bestaudio/best",
