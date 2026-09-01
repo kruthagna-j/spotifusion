@@ -1,0 +1,56 @@
+/* Consistency layer: reuses the existing --lg-* tokens from liquid-glass.css. */
+.liquid-glass,
+.liquid-glass * { box-sizing:border-box; }
+.liquid-glass { width:100%; max-width:100%; overflow-x:hidden; }
+.liquid-glass main { width:100%; max-width:100%; min-width:0; overflow-x:hidden; }
+.liquid-glass main > * { min-width:0; max-width:100%; }
+.liquid-glass .sf-panel,
+.liquid-glass .sf-hero,
+.liquid-glass .sf-settings-section,
+.liquid-glass .sf-account-card,
+.liquid-glass .sf-storage-card,
+.liquid-glass .sf-entity-card,
+.liquid-glass .lg-eq-card { border:1px solid var(--lg-border); background:var(--lg-surface); box-shadow:var(--lg-shadow); backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%); }
+.liquid-glass .sf-panel,
+.liquid-glass .sf-hero,
+.liquid-glass .sf-settings-section,
+.liquid-glass .sf-account-card,
+.liquid-glass .sf-storage-card { border-radius:22px; }
+.liquid-glass .sf-entity-card { border-radius:18px; overflow:hidden; }
+.liquid-glass .music-card-row { display:flex; gap:14px; min-width:0; max-width:100%; overflow-x:auto; overflow-y:hidden; padding:2px 2px 8px; scrollbar-width:none; }
+.liquid-glass .music-card-row::-webkit-scrollbar { display:none; }
+.liquid-glass .music-card-row > button { flex:0 0 clamp(132px,38vw,190px); min-width:0; max-width:190px; }
+.liquid-glass .search-entity-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; min-width:0; }
+@media (min-width:768px) { .liquid-glass .search-entity-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+.liquid-glass .search-category-tabs { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; min-width:0; }
+.liquid-glass .search-category-tabs::-webkit-scrollbar { display:none; }
+.liquid-glass .search-category-tab { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 14px; white-space:nowrap; }
+.liquid-glass .lg-page { width:100%; max-width:100%; min-width:0; overflow-x:hidden; }
+.liquid-glass .lg-page-inner { width:100%; min-width:0; }
+.liquid-glass .lg-eq-title-row > * { min-width:0; }
+.liquid-glass .lg-eq-card { max-width:100%; overflow:hidden; }
+.liquid-glass .lg-eq-bands { min-width:0; }
+.liquid-glass .lg-eq-band input { max-width:28px; }
+.liquid-glass .lg-topbar { width:100%; max-width:100%; min-width:0; background:rgba(250,250,255,.72)!important; backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%); }
+.liquid-glass .mobile-bottom-nav { max-width:100vw; overflow:hidden; }
+.liquid-glass .mobile-bottom-nav-inner { width:calc(100vw - 16px); max-width:calc(100vw - 16px); margin:0 auto; border-radius:22px 22px 0 0; overflow:hidden; }
+.liquid-glass .mobile-tab { min-width:0; flex:1 1 0; }
+.liquid-glass .mobile-tab span:last-child { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.liquid-glass .mobile-mini-player { max-width:100vw; overflow:hidden; }
+.liquid-glass .mobile-mini-player-card { width:calc(100vw - 24px); max-width:calc(100vw - 24px); margin-inline:auto; border:1px solid var(--lg-border); }
+.liquid-glass .mobile-mini-player-card > * { min-width:0; }
+.liquid-glass .control-button,
+.liquid-glass .lg-round-button,
+.liquid-glass .lg-mobile-back,
+.liquid-glass .lg-mobile-action { flex:0 0 auto; }
+.liquid-glass .sf-primary-button,
+.liquid-glass .sf-secondary-button { border-radius:999px; }
+.liquid-glass button,
+.liquid-glass a { max-width:100%; }
+@media (max-width:767px) {
+  .liquid-glass .lg-page { padding-left:12px; padding-right:12px; }
+  .liquid-glass .lg-page-inner { padding-top:8px; }
+  .liquid-glass .lg-eq-title-row h1 { font-size:28px; }
+  .liquid-glass .lg-eq-card { min-height:360px; padding-left:44px; padding-right:12px; }
+  .liquid-glass .lg-eq-bands { gap:8px; }
+}
