@@ -19,6 +19,32 @@ def _load_yt_dlp():
         return None
 
 
+def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
+    """Pick an actual audio URL even when yt-dlp doesn't promote it to info.url."""
+    direct = info.get("url")
+    if direct:
+        return direct
+
+    formats = info.get("formats") or []
+    audio_only = [
+        f for f in formats
+        if f.get("url") and f.get("vcodec") == "none" and f.get("acodec") not in (None, "none")
+    ]
+    if audio_only:
+        audio_only.sort(key=lambda f: (f.get("abr") or 0, f.get("asr") or 0), reverse=True)
+        return audio_only[0].get("url")
+
+    audio_capable = [
+        f for f in formats
+        if f.get("url") and f.get("acodec") not in (None, "none")
+    ]
+    if audio_capable:
+        audio_capable.sort(key=lambda f: (f.get("abr") or 0, f.get("tbr") or 0), reverse=True)
+        return audio_capable[0].get("url")
+
+    return None
+
+
 def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
     """Return a direct audio URL and basic metadata without downloading media."""
     yt_dlp = _load_yt_dlp()
@@ -30,18 +56,39 @@ def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
-        "format": "bestaudio/best",
+        # Prefer clients that can currently expose playable formats without
+        # requiring a manually supplied PO token. web_safari may expose HLS
+        # when normal HTTPS formats are unavailable.
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web_embedded", "web_safari"],
+            },
+        },
+        "format": "bestaudio[protocol=https]/bestaudio/best",
         "socket_timeout": 12,
         "retries": 1,
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if not info or not info.get("url"):
+            info = ydl.extract_info(
+                f"https://www.youtube.com/watch?v={video_id}",
+                download=False,
+            )
+            if not info:
                 return None
+
+            audio_url = _pick_audio_url(info)
+            if not audio_url:
+                logger.warning(
+                    "yt-dlp returned no audio URL for %s (formats=%s)",
+                    video_id,
+                    len(info.get("formats") or []),
+                )
+                return None
+
             return {
                 "id": info.get("id") or video_id,
-                "url": info.get("url"),
+                "url": audio_url,
                 "title": info.get("title"),
                 "durationSeconds": info.get("duration"),
                 "thumbnail": info.get("thumbnail"),
