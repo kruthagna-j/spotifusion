@@ -64,9 +64,10 @@ export default function SearchStable2() {
       }
       if (seq !== requestSeq.current) return
       const nextHasMore = Boolean(data?.hasMore && next.length)
-      setResults(replace || nextBatch === 1 ? next : [...stateRef.current.results, ...next]); setBatch(nextBatch); setHasMore(nextHasMore)
-      writeCache(q, nextCategory, { results: next, batch: nextBatch, hasMore: nextHasMore })
-    } catch (e) { if (seq !== requestSeq.current || e?.name === 'AbortError') return; setResults([]); setBatch(0); setHasMore(false); setError(e?.message || 'Unable to search right now. Please try again.') }
+      const merged = replace || nextBatch === 1 ? next : [...stateRef.current.results, ...next]
+      setResults(merged); setBatch(nextBatch); setHasMore(nextHasMore)
+      writeCache(q, nextCategory, { results: merged, batch: nextBatch, hasMore: nextHasMore })
+    } catch (e) { if (seq !== requestSeq.current || e?.name === 'AbortError') return; setResults([]); setBatch(0); setHasMore(false); setError(e?.message || 'Unable to search right now. Please try again.'); }
     finally { if (seq === requestSeq.current && nextBatch === 1) setLoading(false) }
   }, [user, online])
 
