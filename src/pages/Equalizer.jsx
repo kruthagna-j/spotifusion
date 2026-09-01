@@ -1,17 +1,9 @@
 import { usePlayer, EQ_BANDS } from '@/context/PlayerContext'
-import { ChevronLeft, SlidersHorizontal } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 
 export default function Equalizer() {
   const player = usePlayer()
-  const navigate = useNavigate()
   return (
     <div className="lg-page lg-equalizer-page">
-      <header className="lg-mobile-page-header">
-        <button onClick={() => navigate(-1)} className="lg-round-button" aria-label="Back"><ChevronLeft size={22}/></button>
-        <strong>Equalizer</strong>
-        <button className="lg-round-button" aria-label="Equalizer enabled"><SlidersHorizontal size={18}/></button>
-      </header>
       <div className="lg-page-inner">
         <div className="lg-eq-title-row">
           <div><p className="lg-eyebrow">Audio</p><h1>Equalizer</h1><p>Shape your sound with a five-band EQ.</p></div>
@@ -31,9 +23,9 @@ export default function Equalizer() {
           </div>
         </div>
         <div className="lg-dial-row">
-          <Dial label="Bass Boost" value="" />
-          <Dial label="Virtualizer" value="" />
-          <Dial label="Loudness" value="" />
+          <Dial label="Bass Boost" />
+          <Dial label="Virtualizer" />
+          <Dial label="Loudness" />
         </div>
       </div>
     </div>
