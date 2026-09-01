@@ -20,33 +20,52 @@ def _load_yt_dlp():
 
 
 def _pick_audio_url(info: dict[str, Any]) -> Optional[str]:
-    """Pick an actual audio URL even when yt-dlp doesn't promote it to info.url."""
+    """Pick an actual playable URL from the formats returned by yt-dlp."""
     direct = info.get("url")
-    if direct:
+    if direct and info.get("acodec") not in (None, "none"):
         return direct
 
     formats = info.get("formats") or []
+
+    # Prefer audio-only formats. YouTube may expose these through different
+    # clients depending on current PO-token enforcement.
     audio_only = [
         f for f in formats
-        if f.get("url") and f.get("vcodec") == "none" and f.get("acodec") not in (None, "none")
+        if f.get("url")
+        and f.get("vcodec") == "none"
+        and f.get("acodec") not in (None, "none")
     ]
     if audio_only:
-        audio_only.sort(key=lambda f: (f.get("abr") or 0, f.get("asr") or 0), reverse=True)
+        audio_only.sort(
+            key=lambda f: (f.get("abr") or 0, f.get("asr") or 0),
+            reverse=True,
+        )
         return audio_only[0].get("url")
 
+    # Last resort: a progressive format containing both video and audio is
+    # still playable by an HTML audio element. This is useful when YouTube
+    # withholds standalone audio formats (for example format 18).
     audio_capable = [
         f for f in formats
         if f.get("url") and f.get("acodec") not in (None, "none")
     ]
     if audio_capable:
-        audio_capable.sort(key=lambda f: (f.get("abr") or 0, f.get("tbr") or 0), reverse=True)
+        audio_capable.sort(
+            key=lambda f: (
+                1 if f.get("vcodec") == "none" else 0,
+                f.get("abr") or 0,
+                f.get("tbr") or 0,
+                f.get("height") or 0,
+            ),
+            reverse=True,
+        )
         return audio_capable[0].get("url")
 
     return None
 
 
 def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
-    """Return a direct audio URL and basic metadata without downloading media."""
+    """Return a direct playable URL without downloading or storing media."""
     yt_dlp = _load_yt_dlp()
     if yt_dlp is None or not video_id:
         return None
@@ -56,18 +75,15 @@ def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
-        # Prefer clients that can currently expose playable formats without
-        # requiring a manually supplied PO token. web_safari may expose HLS
-        # when normal HTTPS formats are unavailable.
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web_embedded", "web_safari"],
-            },
-        },
-        "format": "bestaudio[protocol=https]/bestaudio/best",
+        # Do not force web_embedded/web_safari here. YouTube's currently
+        # changing PO-token rules can make those clients expose only SABR/HLS
+        # formats without a direct URL. yt-dlp's maintained default client
+        # selection is better able to fall back to a directly playable format.
+        "format": "bestaudio/best",
         "socket_timeout": 12,
         "retries": 1,
     }
+
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(
@@ -79,10 +95,13 @@ def extract_audio(video_id: str) -> Optional[dict[str, Any]]:
 
             audio_url = _pick_audio_url(info)
             if not audio_url:
+                formats = info.get("formats") or []
                 logger.warning(
-                    "yt-dlp returned no audio URL for %s (formats=%s)",
+                    "yt-dlp returned no playable audio URL for %s (formats=%s, "
+                    "format_ids=%s)",
                     video_id,
-                    len(info.get("formats") or []),
+                    len(formats),
+                    [f.get("format_id") for f in formats[-12:]],
                 )
                 return None
 
