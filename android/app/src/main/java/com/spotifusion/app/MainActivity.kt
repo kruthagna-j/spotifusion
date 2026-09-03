@@ -1,6 +1,7 @@
 package com.spotifusion.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -11,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -42,7 +44,7 @@ class MainActivity : NeonActivity() {
 
         val volume = SeekBar(this).apply {
             max = 100
-            progress = 75
+            progress = (PlaybackController.volume() * 100).toInt()
             progressTintList = ColorStateList.valueOf(Color.rgb(45, 91, 239))
             thumbTintList = ColorStateList.valueOf(Color.rgb(45, 91, 239))
             contentDescription = "Volume"
@@ -64,6 +66,27 @@ class MainActivity : NeonActivity() {
             bottomMargin = dp(88)
         }
         content.addView(volume, lp)
+
+        val lyricsButton = TextView(this).apply {
+            text = "LYRICS"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            background = roundedBlue()
+            contentDescription = "Open lyrics"
+            setOnClickListener { startActivity(Intent(this@MainActivity, LyricsActivity::class.java)) }
+        }
+        val lyricsLp = FrameLayout.LayoutParams(dp(72), dp(38), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = dp(10)
+            bottomMargin = dp(126)
+        }
+        content.addView(lyricsButton, lyricsLp)
+    }
+
+    private fun roundedBlue() = android.graphics.drawable.GradientDrawable().apply {
+        setColor(Color.rgb(45, 91, 239))
+        cornerRadius = dp(19).toFloat()
     }
 
     private fun requestMusicPermissions() {
@@ -133,9 +156,9 @@ class MainActivity : NeonActivity() {
         val artist = PlaybackController.currentArtist().ifBlank { null }
         val mini = root.getChildAt(2) as? ViewGroup
         val info = mini?.getChildAt(1) as? ViewGroup
-        (info?.getChildAt(0) as? android.widget.TextView)?.let { if (title != null) it.text = title }
-        (info?.getChildAt(1) as? android.widget.TextView)?.let { if (artist != null) it.text = if (PlaybackController.isPlaying()) "$artist · Playing" else artist }
-        (mini?.getChildAt(3) as? android.widget.TextView)?.let {
+        (info?.getChildAt(0) as? TextView)?.let { if (title != null) it.text = title }
+        (info?.getChildAt(1) as? TextView)?.let { if (artist != null) it.text = if (PlaybackController.isPlaying()) "$artist · Playing" else artist }
+        (mini?.getChildAt(3) as? TextView)?.let {
             it.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
             it.setOnClickListener { PlaybackController.toggle() }
         }
@@ -144,8 +167,8 @@ class MainActivity : NeonActivity() {
         val nowPlayingHeader = findTextView(page, "NOW PLAYING") ?: return
         val column = nowPlayingHeader.parent as? ViewGroup ?: return
         if (column.childCount >= 7) {
-            (column.getChildAt(1) as? android.widget.TextView)?.let { if (title != null) it.text = title }
-            (column.getChildAt(2) as? android.widget.TextView)?.let { if (artist != null) it.text = artist }
+            (column.getChildAt(1) as? TextView)?.let { if (title != null) it.text = title }
+            (column.getChildAt(2) as? TextView)?.let { if (artist != null) it.text = artist }
             val seeks = mutableListOf<SeekBar>()
             collectSeekBars(page, seeks)
             seeks.firstOrNull()?.let { seek ->
@@ -165,24 +188,24 @@ class MainActivity : NeonActivity() {
             }
             val actions = column.getChildAt(6) as? ViewGroup
             actions?.let {
-                (it.getChildAt(0) as? android.widget.TextView)?.setOnClickListener {
+                (it.getChildAt(0) as? TextView)?.setOnClickListener {
                     PlaybackController.setShuffle(!PlaybackController.isShuffleEnabled())
                 }
-                (it.getChildAt(1) as? android.widget.TextView)?.setOnClickListener { PlaybackController.previous() }
-                (it.getChildAt(2) as? android.widget.TextView)?.let { button ->
+                (it.getChildAt(1) as? TextView)?.setOnClickListener { PlaybackController.previous() }
+                (it.getChildAt(2) as? TextView)?.let { button ->
                     button.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
                     button.setOnClickListener { PlaybackController.toggle() }
                 }
-                (it.getChildAt(3) as? android.widget.TextView)?.setOnClickListener { PlaybackController.next() }
-                (it.getChildAt(4) as? android.widget.TextView)?.setOnClickListener {
+                (it.getChildAt(3) as? TextView)?.setOnClickListener { PlaybackController.next() }
+                (it.getChildAt(4) as? TextView)?.setOnClickListener {
                     PlaybackController.setRepeat(!PlaybackController.isRepeatEnabled())
                 }
             }
         }
     }
 
-    private fun findTextView(view: View, text: String): android.widget.TextView? {
-        if (view is android.widget.TextView && view.text?.toString() == text) return view
+    private fun findTextView(view: View, text: String): TextView? {
+        if (view is TextView && view.text?.toString() == text) return view
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
                 val found = findTextView(view.getChildAt(i), text)
