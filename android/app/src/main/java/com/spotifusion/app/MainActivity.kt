@@ -4,7 +4,6 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -14,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : NeonActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        PlaybackController.connect(this)
 
         val content = findViewById<ViewGroup>(android.R.id.content)
         val shell = content.getChildAt(0)
@@ -26,8 +26,7 @@ class MainActivity : NeonActivity() {
             ViewCompat.requestApplyInsets(root)
         }
 
-        // Always-visible volume control for the compact player. It sits above
-        // the bottom navigation so it cannot be hidden by the gesture/system bar.
+        // Volume is now connected to the real Media3 player, not just UI state.
         val volume = SeekBar(this).apply {
             max = 100
             progress = 75
@@ -36,6 +35,13 @@ class MainActivity : NeonActivity() {
             contentDescription = "Volume"
             isClickable = true
             isFocusable = true
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                    if (fromUser) PlaybackController.setVolume(value / 100f)
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+            })
         }
         val lp = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -47,6 +53,11 @@ class MainActivity : NeonActivity() {
             bottomMargin = dp(88)
         }
         content.addView(volume, lp)
+    }
+
+    override fun onDestroy() {
+        PlaybackController.disconnect()
+        super.onDestroy()
     }
 
     private fun dp(value: Int): Int =
