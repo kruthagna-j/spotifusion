@@ -26,8 +26,12 @@ class MainActivity : NeonActivity() {
         private const val NOTIFICATION_PERMISSION_REQUEST = 4102
     }
 
+    private lateinit var musicStore: UserMusicStore
+    private var lastRecordedMediaId: String? = null
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        musicStore = UserMusicStore(this)
         PlaybackController.connect(this)
         requestMusicPermissions()
 
@@ -124,7 +128,10 @@ class MainActivity : NeonActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = syncPlayerUi()
-        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = syncPlayerUi()
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            recordRecentlyPlayed(mediaItem)
+            syncPlayerUi()
+        }
         override fun onPlaybackStateChanged(playbackState: Int) = syncPlayerUi()
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = syncPlayerUi()
         override fun onRepeatModeChanged(repeatMode: Int) = syncPlayerUi()
@@ -150,6 +157,15 @@ class MainActivity : NeonActivity() {
         super.onStop()
     }
 
+    private fun recordRecentlyPlayed(mediaItem: androidx.media3.common.MediaItem?) {
+        val id = mediaItem?.mediaId ?: return
+        if (id == lastRecordedMediaId) return
+        val trackId = id.toLongOrNull() ?: return
+        val track = runCatching { LocalMusicScanner.scan(this).firstOrNull { it.id == trackId } }.getOrNull() ?: return
+        musicStore.addRecentlyPlayed(track)
+        lastRecordedMediaId = id
+    }
+
     private fun syncPlayerUi() {
         val root = findViewById<ViewGroup>(android.R.id.content)?.getChildAt(0) as? ViewGroup ?: return
         val title = PlaybackController.currentTitle().ifBlank { null }
@@ -158,6 +174,13 @@ class MainActivity : NeonActivity() {
         val info = mini?.getChildAt(1) as? ViewGroup
         (info?.getChildAt(0) as? TextView)?.let { if (title != null) it.text = title }
         (info?.getChildAt(1) as? TextView)?.let { if (artist != null) it.text = if (PlaybackController.isPlaying()) "$artist · Playing" else artist }
+        (mini?.getChildAt(2) as? TextView)?.setOnClickListener {
+            val trackId = PlaybackController.currentMediaId()?.toLongOrNull()
+            if (trackId != null) {
+                val favorite = musicStore.toggleFavorite(trackId)
+                Toast.makeText(this, if (favorite) "Added to Favorites" else "Removed from Favorites", Toast.LENGTH_SHORT).show()
+            }
+        }
         (mini?.getChildAt(3) as? TextView)?.let {
             it.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
             it.setOnClickListener { PlaybackController.toggle() }
