@@ -80,6 +80,7 @@ object PlaybackController {
         controller?.removeListener(listener)
     }
 
+    fun currentMediaId(): String? = controller?.currentMediaItem?.mediaId
     fun currentTitle(): String = controller?.mediaMetadata?.title?.toString().orEmpty()
     fun currentArtist(): String = controller?.mediaMetadata?.artist?.toString().orEmpty()
     fun currentAlbum(): String = controller?.mediaMetadata?.albumTitle?.toString().orEmpty()
