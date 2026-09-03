@@ -9,6 +9,7 @@ class UserMusicStore(context: Context) {
     private val prefs = context.getSharedPreferences("spotifusion_music", Context.MODE_PRIVATE)
 
     fun isFavorite(trackId: Long): Boolean = favorites().contains(trackId)
+    fun favoriteIds(): Set<Long> = favorites()
 
     fun toggleFavorite(trackId: Long): Boolean {
         val set = favorites()
@@ -38,12 +39,9 @@ class UserMusicStore(context: Context) {
             for (i in 0 until array.length()) {
                 val o = array.optJSONObject(i) ?: continue
                 add(LocalTrack(
-                    id = o.optLong("id"),
-                    uri = android.net.Uri.parse(o.optString("uri")),
-                    title = o.optString("title"),
-                    artist = o.optString("artist"),
-                    album = o.optString("album"),
-                    durationMs = o.optLong("duration")
+                    id = o.optLong("id"), uri = android.net.Uri.parse(o.optString("uri")),
+                    title = o.optString("title"), artist = o.optString("artist"),
+                    album = o.optString("album"), durationMs = o.optLong("duration")
                 ))
             }
         }
@@ -51,16 +49,10 @@ class UserMusicStore(context: Context) {
 
     private fun saveRecent(list: List<LocalTrack>) {
         val array = JSONArray()
-        list.forEach { t ->
-            array.put(JSONObject().apply {
-                put("id", t.id)
-                put("uri", t.uri.toString())
-                put("title", t.title)
-                put("artist", t.artist)
-                put("album", t.album)
-                put("duration", t.durationMs)
-            })
-        }
+        list.forEach { t -> array.put(JSONObject().apply {
+            put("id", t.id); put("uri", t.uri.toString()); put("title", t.title)
+            put("artist", t.artist); put("album", t.album); put("duration", t.durationMs)
+        }) }
         prefs.edit().putString("recent", array.toString()).apply()
     }
 }
