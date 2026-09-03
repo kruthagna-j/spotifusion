@@ -47,7 +47,7 @@ class PlaylistActivity : AppCompatActivity() {
     }
 
     private fun createPlaylist() {
-        val input = EditText(this).apply { hint = "Playlist name"; singleLine = true }
+        val input = EditText(this).apply { hint = "Playlist name"; setSingleLine(true) }
         AlertDialog.Builder(this)
             .setTitle("Create playlist")
             .setView(input)
