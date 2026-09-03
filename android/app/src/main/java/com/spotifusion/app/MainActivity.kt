@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -15,6 +16,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.Player
 
 class MainActivity : NeonActivity() {
     companion object {
@@ -95,6 +97,104 @@ class MainActivity : NeonActivity() {
         if (tracks.isNotEmpty()) {
             Toast.makeText(this, "Found ${tracks.size} music track${if (tracks.size == 1) "" else "s"} on this device.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) = syncPlayerUi()
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) = syncPlayerUi()
+        override fun onPlaybackStateChanged(playbackState: Int) = syncPlayerUi()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = syncPlayerUi()
+        override fun onRepeatModeChanged(repeatMode: Int) = syncPlayerUi()
+    }
+
+    private val uiTicker = object : Runnable {
+        override fun run() {
+            syncPlayerUi()
+            window.decorView.postDelayed(this, 500L)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        PlaybackController.addListener(playerListener)
+        window.decorView.post(uiTicker)
+        syncPlayerUi()
+    }
+
+    override fun onStop() {
+        window.decorView.removeCallbacks(uiTicker)
+        PlaybackController.removeListener(playerListener)
+        super.onStop()
+    }
+
+    private fun syncPlayerUi() {
+        val root = findViewById<ViewGroup>(android.R.id.content)?.getChildAt(0) as? ViewGroup ?: return
+        val title = PlaybackController.currentTitle().ifBlank { null }
+        val artist = PlaybackController.currentArtist().ifBlank { null }
+        val mini = root.getChildAt(2) as? ViewGroup
+        val info = mini?.getChildAt(1) as? ViewGroup
+        (info?.getChildAt(0) as? android.widget.TextView)?.let { if (title != null) it.text = title }
+        (info?.getChildAt(1) as? android.widget.TextView)?.let { if (artist != null) it.text = if (PlaybackController.isPlaying()) "$artist · Playing" else artist }
+        (mini?.getChildAt(3) as? android.widget.TextView)?.let {
+            it.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
+            it.setOnClickListener { PlaybackController.toggle() }
+        }
+
+        val page = root.getChildAt(1) as? ViewGroup ?: return
+        val nowPlayingHeader = findTextView(page, "NOW PLAYING") ?: return
+        val column = nowPlayingHeader.parent as? ViewGroup ?: return
+        if (column.childCount >= 7) {
+            (column.getChildAt(1) as? android.widget.TextView)?.let { if (title != null) it.text = title }
+            (column.getChildAt(2) as? android.widget.TextView)?.let { if (artist != null) it.text = artist }
+            val seeks = mutableListOf<SeekBar>()
+            collectSeekBars(page, seeks)
+            seeks.firstOrNull()?.let { seek ->
+                val duration = PlaybackController.duration()
+                seek.max = duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1000)
+                seek.progress = PlaybackController.position().coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                if (seek.tag != "spotifusion-progress-bound") {
+                    seek.tag = "spotifusion-progress-bound"
+                    seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                            if (fromUser) PlaybackController.seek(value.toLong())
+                        }
+                        override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                        override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+                    })
+                }
+            }
+            val actions = column.getChildAt(6) as? ViewGroup
+            actions?.let {
+                (it.getChildAt(0) as? android.widget.TextView)?.setOnClickListener {
+                    PlaybackController.setShuffle(!PlaybackController.isShuffleEnabled())
+                }
+                (it.getChildAt(1) as? android.widget.TextView)?.setOnClickListener { PlaybackController.previous() }
+                (it.getChildAt(2) as? android.widget.TextView)?.let { button ->
+                    button.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
+                    button.setOnClickListener { PlaybackController.toggle() }
+                }
+                (it.getChildAt(3) as? android.widget.TextView)?.setOnClickListener { PlaybackController.next() }
+                (it.getChildAt(4) as? android.widget.TextView)?.setOnClickListener {
+                    PlaybackController.setRepeat(!PlaybackController.isRepeatEnabled())
+                }
+            }
+        }
+    }
+
+    private fun findTextView(view: View, text: String): android.widget.TextView? {
+        if (view is android.widget.TextView && view.text?.toString() == text) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val found = findTextView(view.getChildAt(i), text)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    private fun collectSeekBars(view: View, result: MutableList<SeekBar>) {
+        if (view is SeekBar) result += view
+        if (view is ViewGroup) for (i in 0 until view.childCount) collectSeekBars(view.getChildAt(i), result)
     }
 
     override fun onDestroy() {
