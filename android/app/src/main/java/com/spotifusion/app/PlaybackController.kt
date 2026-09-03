@@ -3,6 +3,7 @@ package com.spotifusion.app
 import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -17,9 +18,7 @@ object PlaybackController {
         if (controller != null || controllerFuture != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         controllerFuture = MediaController.Builder(context, token).buildAsync().also { future ->
-            future.addListener({
-                runCatching { controller = future.get() }
-            }, MoreExecutors.directExecutor())
+            future.addListener({ runCatching { controller = future.get() } }, MoreExecutors.directExecutor())
         }
     }
 
@@ -30,14 +29,21 @@ object PlaybackController {
         controllerFuture = null
     }
 
+    private fun item(uri: String, title: String, artist: String, album: String? = null): MediaItem =
+        MediaItem.Builder().setUri(uri).setMediaMetadata(
+            MediaMetadata.Builder().setTitle(title).setArtist(artist).apply { album?.let { setAlbumTitle(it) } }.build()
+        ).build()
+
     fun play(uri: String, title: String, artist: String, album: String? = null) {
+        controller?.let { c -> c.setMediaItem(item(uri, title, artist, album)); c.prepare(); c.play() }
+    }
+
+    fun playTracks(tracks: List<LocalTrack>, startIndex: Int = 0) {
         val c = controller ?: return
-        val metadata = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(artist)
-            .apply { album?.let { setAlbumTitle(it) } }
-            .build()
-        c.setMediaItem(MediaItem.Builder().setUri(uri).setMediaMetadata(metadata).build())
+        if (tracks.isEmpty()) return
+        val items = tracks.map { item(it.uri.toString(), it.title, it.artist, it.album) }
+        val index = startIndex.coerceIn(0, items.lastIndex)
+        c.setMediaItems(items, index, 0L)
         c.prepare()
         c.play()
     }
@@ -50,7 +56,6 @@ object PlaybackController {
     fun setVolume(value: Float) { controller?.volume = value.coerceIn(0f, 1f) }
     fun setShuffle(enabled: Boolean) { controller?.shuffleModeEnabled = enabled }
     fun setRepeat(enabled: Boolean) { controller?.repeatMode = if (enabled) 1 else 0 }
-
     fun isConnected(): Boolean = controller != null
     fun isPlaying(): Boolean = controller?.isPlaying == true
     fun position(): Long = controller?.currentPosition ?: 0L
