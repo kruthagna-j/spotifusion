@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { HardDrive, ShieldCheck, AlertTriangle, RefreshCw, Heart, Trash2, Search } from 'lucide-react'
-import { useLocalSongs, deleteLocalSong, updateLocalSong } from '@/lib/localMusicDb'
+import { useEffect, useRef, useState } from 'react'
+import { HardDrive, ShieldCheck, AlertTriangle, RefreshCw, Heart, Trash2, Search, Plus, FolderOpen } from 'lucide-react'
+import { useLocalSongs, deleteLocalSong, updateLocalSong, addLocalSongs, addMusicFolder, SUPPORTS_FOLDER_ACCESS } from '@/lib/localMusicDb'
 import TrackRow from '@/components/TrackRow'
 
 const ACCESS_KEY = 'spotifusion:device-media-access:v1'
@@ -19,6 +19,40 @@ export default function LocalFilesSection() {
   const [permission, setPermission] = useState('unknown')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importMessage, setImportMessage] = useState('')
+  const fileInputRef = useRef(null)
+
+  async function handleFilesPicked(e) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setImportBusy(true)
+    setImportMessage('')
+    try {
+      const added = await addLocalSongs(files)
+      refresh()
+      setImportMessage(added.length ? `Added ${added.length} song${added.length === 1 ? '' : 's'}.` : 'No supported audio files found in that selection.')
+    } catch (err) {
+      setImportMessage(err.message || 'Could not add those files.')
+    } finally {
+      setImportBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleAddFolder() {
+    setImportBusy(true)
+    setImportMessage('')
+    try {
+      const added = await addMusicFolder()
+      refresh()
+      setImportMessage(added?.length ? `Added ${added.length} song${added.length === 1 ? '' : 's'} from the folder.` : 'No supported audio files found in that folder.')
+    } catch (err) {
+      if (err?.name !== 'AbortError') setImportMessage(err.message || 'Could not read that folder.')
+    } finally {
+      setImportBusy(false)
+    }
+  }
 
   async function syncNativeMedia() {
     const bridge = getNativeMediaBridge()
@@ -127,7 +161,53 @@ export default function LocalFilesSection() {
         {message && <p className="text-xs text-yellow-500 mt-3 leading-5">{message}</p>}
       </div>
 
-      {enabled && songs.length > 0 && (
+      <div className="rounded-2xl border border-white/10 bg-surface-elevated/70 p-4 md:p-5 mt-4">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="w-10 h-10 rounded-xl bg-brand/10 text-brand grid place-items-center shrink-0">
+            <Plus size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Add music from this device</p>
+            <p className="text-xs text-text-subdued mt-1 leading-5">
+              Works in any browser. Files stay on this device — nothing is uploaded. Supports MP3, WAV, M4A, AAC, OGG, FLAC.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"
+            multiple
+            onChange={handleFilesPicked}
+            className="hidden"
+            id="local-audio-file-input"
+          />
+          <button
+            type="button"
+            disabled={importBusy}
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 bg-brand text-black font-bold text-xs px-4 py-2.5 rounded-full disabled:opacity-60"
+          >
+            {importBusy ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+            Add music files
+          </button>
+          {SUPPORTS_FOLDER_ACCESS && (
+            <button
+              type="button"
+              disabled={importBusy}
+              onClick={handleAddFolder}
+              className="inline-flex items-center gap-2 bg-white/10 font-bold text-xs px-4 py-2.5 rounded-full disabled:opacity-60"
+            >
+              <FolderOpen size={14} />
+              Add a folder
+            </button>
+          )}
+        </div>
+        {importMessage && <p className="text-xs text-text-subdued mt-3 leading-5">{importMessage}</p>}
+      </div>
+
+      {songs.length > 0 && (
         <div className="mt-5">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div className="flex items-center gap-2 text-sm font-semibold text-text"><HardDrive size={16} className="text-text-muted" />Device Music</div>
@@ -155,6 +235,9 @@ export default function LocalFilesSection() {
 
       {enabled && songs.length === 0 && !busy && (
         <div className="text-center py-12 text-text-muted text-sm">No device music was returned by the Android media provider.</div>
+      )}
+      {!enabled && songs.length === 0 && !busy && (
+        <div className="text-center py-8 text-text-muted text-sm">No local music yet — add files or a folder above to get started.</div>
       )}
     </div>
   )
