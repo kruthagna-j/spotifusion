@@ -1,5 +1,6 @@
 package com.spotifusion.app
 
+import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -69,26 +70,21 @@ class PlaylistActivity : AppCompatActivity() {
             })
             return
         }
+        val byId = library.associateBy { it.id }
         playlists.forEach { playlist ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(16, 10, 8, 10); setBackgroundColor(Color.WHITE)
+                setPadding(10, 10, 8, 10); setBackgroundColor(Color.WHITE)
             }
-            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val firstTrack = playlist.trackIds.firstNotNullOfOrNull { byId[it] }
+            row.addView(ArtworkViewFactory.create(this, firstTrack, 58), LinearLayout.LayoutParams(58, 58))
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 4, 0) }
             info.addView(TextView(this).apply { text = playlist.name; textSize = 16f; setTextColor(ink); setTypeface(typeface, 1) })
             info.addView(TextView(this).apply { text = "${playlist.trackIds.size} songs"; textSize = 11f; setTextColor(muted) })
             row.addView(info, LinearLayout.LayoutParams(0, 62, 1f))
-            row.addView(Button(this).apply {
-                text = "PLAY"; setOnClickListener { playPlaylist(playlist) }
-            })
-            row.addView(Button(this).apply {
-                text = "+ SONG"; setOnClickListener { addSong(playlist) }
-            })
-            row.addView(Button(this).apply {
-                text = "×"; setOnClickListener {
-                    store.delete(playlist.id); render()
-                }
-            })
+            row.addView(Button(this).apply { text = "PLAY"; setOnClickListener { playPlaylist(playlist) } })
+            row.addView(Button(this).apply { text = "+ SONG"; setOnClickListener { addSong(playlist) } })
+            row.addView(Button(this).apply { text = "×"; setOnClickListener { store.delete(playlist.id); render() } })
             list.addView(row, LinearLayout.LayoutParams(-1, 82).apply { bottomMargin = 8 })
         }
     }
