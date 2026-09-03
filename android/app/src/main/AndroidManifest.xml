@@ -18,9 +18,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Spotifusion">
-        <activity
-            android:name=".LyricsActivity"
-            android:exported="false" />
+        <activity android:name=".PlaylistActivity" android:exported="false" />
+        <activity android:name=".LyricsActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
