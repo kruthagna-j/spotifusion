@@ -313,6 +313,15 @@ export function PlayerProvider({ children }) {
   function changeVolume(v) { setVolume(v); setMuted(false); ytPlayerRef.current?.setVolume(v); if (localAudioRef.current) localAudioRef.current.volume = v / 100 }
   function toggleMute() { const next = !muted; setMuted(next); ytPlayerRef.current?.setVolume(next ? 0 : volume); if (localAudioRef.current) localAudioRef.current.volume = next ? 0 : volume / 100 }
 
+  function playNextInQueue(track) {
+    if (!track) return
+    if (!queue.length || queueIndex < 0) { playTrack(track, [track]); return }
+    const insertAt = queueIndex + 1
+    const nextQueue = [...queue.slice(0, insertAt), track, ...queue.slice(insertAt)]
+    setQueue(nextQueue)
+    if (shuffle) resetShuffleOrder(nextQueue.length, queueIndex)
+  }
+
   function removeFromQueue(index) {
     if (index < 0 || index >= queue.length) return
     const wasCurrent = index === queueIndex
@@ -353,7 +362,7 @@ export function PlayerProvider({ children }) {
     queue, queueIndex, currentTrack, isPlaying, progress, duration, volume, muted, shuffle, repeatMode,
     playbackMode, isDirectStream,
     setVolume: changeVolume, setMuted, setRepeatMode, removeFromQueue, reorderQueue, clearQueue,
-    playerReady: apiReady, playTrack, togglePlay, playNext, playPrevious, seekTo, changeVolume, toggleMute,
+    playerReady: apiReady, playTrack, togglePlay, playNext, playPrevious, playNextInQueue, seekTo, changeVolume, toggleMute,
     toggleShuffle: () => setShuffle((s) => { const next = !s; if (next) resetShuffleOrder(queue.length, queueIndex); else shuffleStateRef.current = { order: [], position: -1 }; return next }),
     cycleRepeat: () => setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')),
     eqSupported: isLocal, eqGains, eqPreset, eqBands: EQ_BANDS, eqPresetNames: Object.keys(EQ_PRESETS), setEqBand, applyEqPreset,
@@ -361,7 +370,7 @@ export function PlayerProvider({ children }) {
     openNowPlaying: () => setNowPlayingOpen(true), closeNowPlaying: () => setNowPlayingOpen(false), setSleepTimer, clearSleepTimer,
   }), [queue, queueIndex, currentTrack, isPlaying, progress, duration, volume, muted, shuffle, repeatMode, playbackMode, isDirectStream, eqGains, eqPreset, outputSupported, outputDeviceId, outputDeviceLabel, sleepTimerSeconds, nowPlayingOpen, apiReady, isLocal])
 
-  return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={{ currentTrackId: currentTrack?.id ?? null, isPlaying, playTrack, togglePlay, openNowPlaying: () => setNowPlayingOpen(true) }}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
+  return <PlayerContext.Provider value={value}><PlayerRowContext.Provider value={{ currentTrackId: currentTrack?.id ?? null, isPlaying, playTrack, togglePlay, playNextInQueue, openNowPlaying: () => setNowPlayingOpen(true) }}>{children}</PlayerRowContext.Provider></PlayerContext.Provider>
 }
 export function usePlayer() { const ctx = useContext(PlayerContext); if (!ctx) throw new Error('usePlayer must be used within PlayerProvider'); return ctx }
 export function usePlayerRow() { const ctx = useContext(PlayerRowContext); if (!ctx) throw new Error('usePlayerRow must be used within PlayerRowContext'); return ctx }
