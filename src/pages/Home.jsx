@@ -55,6 +55,13 @@ export default function Home() {
 
   const mixes=useMemo(()=>recent.length?recent:liked.length?liked:localSongs,[recent,liked,localSongs])
   const personalized=useMemo(()=>{const s=new Set();return [...liked,...recent].filter(t=>t?.id&&!s.has(t.id)&&s.add(t.id)).slice(0,12)},[liked,recent])
+
+  const keepListeningContent = recentLoading
+    ? <div className="music-card-row">{Array.from({length:6},(_,i)=><div key={i} className="skeleton aspect-square rounded-2xl min-w-[150px]"/>)}</div>
+    : mixes.length
+      ? <div className="music-card-row">{mixes.slice(0,12).map(t=><TrackCard key={t.id} track={t} tracks={mixes} player={player}/>)}</div>
+      : <div className="sf-panel p-10 text-center text-text-muted">Search for your first song and it will appear here.</div>
+
   return <div className="p-4 md:p-7 max-w-[1500px] mx-auto space-y-8 md:space-y-10 overflow-x-hidden">
     <section className="sf-hero p-6 md:p-12 overflow-hidden relative">
       <div className="absolute -right-20 -top-24 w-80 h-80 rounded-full bg-brand/20 blur-3xl"/>
@@ -68,7 +75,7 @@ export default function Home() {
     </section>
     <section><div className="mb-4"><p className="text-xs text-brand font-black uppercase tracking-widest">Quick access</p><h2 className="text-xl md:text-2xl font-black mt-1">Your Spotifusion</h2></div><div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Quick to="/search" icon={Search} title="Search" text="Songs, artists and albums"/><Quick to="/liked-songs" icon={Heart} title="Liked Songs" text={`${liked.length} saved tracks`}/><Quick to="/local-files" icon={Music2} title="Local Music" text={`${localSongs.length} tracks on device`}/><Quick to="/settings" icon={Settings2} title="Settings" text="Playback, audio and privacy"/></div></section>
     {recommended.length>0&&<MusicSection section={{id:'recommended',label:'Made for you',title:'Recommended songs',subtitle:'Based on your selected languages and favorite artists',tracks:recommended}} player={player}/>} 
-    <section><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-text-subdued uppercase tracking-widest font-bold">Keep listening</p><h2 className="text-xl md:text-2xl font-black mt-1">{recent.length?'Recently played':'Start listening'}</h2></div><Link to="/recently-played" className="text-sm font-bold text-text-muted">See all</Link></div>{recentLoading?<div className="music-card-row">{Array.from({length:6},(_,i)=><div key={i} className="skeleton aspect-square rounded-2xl min-w-[150px]"/></div>:mixes.length?<div className="music-card-row">{mixes.slice(0,12).map(t=><TrackCard key={t.id} track={t} tracks={mixes} player={player}/>)}</div>:<div className="sf-panel p-10 text-center text-text-muted">Search for your first song and it will appear here.</div>}</section>
+    <section><div className="flex items-end justify-between mb-4"><div><p className="text-xs text-text-subdued uppercase tracking-widest font-bold">Keep listening</p><h2 className="text-xl md:text-2xl font-black mt-1">{recent.length?'Recently played':'Start listening'}</h2></div><Link to="/recently-played" className="text-sm font-bold text-text-muted">See all</Link></div>{keepListeningContent}</section>
     {personalized.length>0&&<MusicSection section={{id:'because-you-listened',label:'For you',title:'Because you listened to these',tracks:personalized}} player={player}/>} 
     {discoverLoading&&<section><div className="music-card-row">{Array.from({length:5},(_,i)=><div key={i} className="skeleton aspect-square rounded-2xl min-w-[150px]"/></div></section>}
     {discover.sections?.map(s=><MusicSection key={s.id} section={s} player={player}/>)}
