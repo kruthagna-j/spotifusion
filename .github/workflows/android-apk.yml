@@ -46,9 +46,41 @@ jobs:
         working-directory: android
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace --warning-mode all
 
+      - name: Create temporary CI signing key
+        env:
+          STORE_PASSWORD: spotifusion-ci-build
+          KEY_PASSWORD: spotifusion-ci-build
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/spotifusion-ci.jks" \
+            -alias spotifusion \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$STORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=Spotifusion CI, OU=Android, O=Spotifusion, L=Kurnool, ST=Andhra Pradesh, C=IN"
+
+      - name: Align and sign release APK
+        env:
+          STORE_PASSWORD: spotifusion-ci-build
+          KEY_PASSWORD: spotifusion-ci-build
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          UNSIGNED=$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' ! -name 'spotifusion-release.apk' | head -n 1)
+          test -n "$UNSIGNED"
+          "$BUILD_TOOLS/zipalign" -f 4 "$UNSIGNED" "$RUNNER_TEMP/spotifusion-aligned.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$RUNNER_TEMP/spotifusion-ci.jks" \
+            --ks-key-alias spotifusion \
+            --ks-pass "pass:$STORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --out android/app/build/outputs/apk/release/spotifusion-release.apk \
+            "$RUNNER_TEMP/spotifusion-aligned.apk"
+          "$BUILD_TOOLS/apksigner" verify --verbose android/app/build/outputs/apk/release/spotifusion-release.apk
+
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: spotifusion-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/release/spotifusion-release.apk
           if-no-files-found: error
