@@ -1,4 +1,6 @@
 :root {
+  --color-brand: #9b4dff;
+  --color-brand-hover: #b66cff;
   --sf-purple: #9b4dff;
   --sf-purple-bright: #b66cff;
   --sf-purple-soft: rgba(155,77,255,.14);
