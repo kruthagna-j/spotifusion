@@ -21,12 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -53,10 +52,6 @@ import androidx.compose.ui.unit.sp
 import com.example.model.SettingsState
 import com.example.ui.theme.BgDark
 import com.example.ui.theme.GlassBorder
-import com.example.ui.theme.ImmersiveOutlineVariant
-import com.example.ui.theme.ImmersivePrimary
-import com.example.ui.theme.ImmersiveSecondaryContainer
-import com.example.ui.theme.ImmersiveSurfaceCard
 import com.example.ui.theme.SpotifyGreen
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceDark
@@ -67,267 +62,61 @@ import com.example.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(
-  settings: SettingsState,
-  onUpdateAudioQuality: (String) -> Unit,
-  onUpdateCrossfade: (Int) -> Unit,
-  onToggleShakeToSkip: (Boolean) -> Unit,
-  onToggleLyricsAutoScroll: (Boolean) -> Unit,
-  onToggleVisualizer60fps: (Boolean) -> Unit,
-  onClearCache: () -> Unit,
-  onDismiss: () -> Unit
-) {
+fun SettingsSheet(settings: SettingsState, onUpdateAudioQuality: (String) -> Unit, onUpdateCrossfade: (Int) -> Unit, onToggleShakeToSkip: (Boolean) -> Unit, onToggleLyricsAutoScroll: (Boolean) -> Unit, onToggleVisualizer60fps: (Boolean) -> Unit, onToggleNotifications: (Boolean) -> Unit, onToggleDarkTheme: (Boolean) -> Unit, onClearCache: () -> Unit, onDismiss: () -> Unit) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-  ModalBottomSheet(
-    onDismissRequest = onDismiss,
-    sheetState = sheetState,
-    containerColor = SurfaceDark,
-    tonalElevation = 12.dp,
-    modifier = Modifier.testTag("settings_modal_bottom_sheet")
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 8.dp)
-        .padding(bottom = 36.dp)
-    ) {
-      // Header
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(Icons.Default.Settings, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(24.dp))
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(
-            text = "Settings & Audio Lab",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Black,
-            color = TextPrimary
-          )
-        }
-
-        IconButton(onClick = onDismiss) {
-          Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
-        }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = SurfaceDark, tonalElevation = 12.dp, modifier = Modifier.testTag("settings_modal_bottom_sheet")) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp).padding(bottom = 36.dp)) {
+      Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Settings, null, tint = SpotifyGreen, modifier = Modifier.size(24.dp)); Spacer(Modifier.width(8.dp)); Text("Settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = TextPrimary) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close", tint = TextSecondary) }
       }
-
-      Spacer(modifier = Modifier.height(16.dp))
-
-      // Section: Audio Streaming Quality
-      SettingsSectionTitle(title = "AUDIO & STREAMING")
-
-      val qualities = listOf("Normal (160kbps)", "High (320kbps)", "Hi-Fi Studio")
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(12.dp))
-          .background(SurfaceCard)
-          .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
-          .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        qualities.forEach { quality ->
-          val isSelected = settings.audioQuality == quality
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .clip(RoundedCornerShape(8.dp))
-              .background(if (isSelected) SpotifyGreen else Color.Transparent)
-              .clickable { onUpdateAudioQuality(quality) }
-              .padding(vertical = 8.dp),
-            contentAlignment = Alignment.Center
-          ) {
-            Text(
-              text = quality.split(" ").first(),
-              style = MaterialTheme.typography.bodySmall,
-              fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-              color = if (isSelected) BgDark else TextSecondary,
-              fontSize = 11.sp
-            )
-          }
-        }
+      Spacer(Modifier.height(12.dp))
+      SettingsSectionTitle("APPEARANCE")
+      Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(14.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        ThemeOption(Icons.Default.DarkMode, "Dark", settings.darkTheme, { onToggleDarkTheme(true) }, Modifier.weight(1f))
+        ThemeOption(Icons.Default.LightMode, "Light", !settings.darkTheme, { onToggleDarkTheme(false) }, Modifier.weight(1f))
       }
-
-      Spacer(modifier = Modifier.height(16.dp))
-
-      // Section: Crossfade Playback
-      SettingsSectionTitle(title = "PLAYBACK ENGINE")
-
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(14.dp))
-          .background(SurfaceCard)
-          .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
-          .padding(14.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text("Crossfade Between Songs", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-          Text("${settings.crossfadeSec}s", color = SpotifyGreen, fontWeight = FontWeight.Bold)
-        }
-        Slider(
-          value = settings.crossfadeSec.toFloat(),
-          onValueChange = { onUpdateCrossfade(it.toInt()) },
-          valueRange = 0f..12f,
-          steps = 11,
-          colors = SliderDefaults.colors(
-            thumbColor = SpotifyGreen,
-            activeTrackColor = SpotifyGreen,
-            inactiveTrackColor = SurfaceElevated
-          )
-        )
+      Spacer(Modifier.height(16.dp))
+      SettingsSectionTitle("AUDIO & STREAMING")
+      val qualities = listOf("Normal (160kbps)", "High (320kbps)", "Maximum")
+      Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(12.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        qualities.forEach { quality -> val selected = settings.audioQuality == quality; Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (selected) SpotifyGreen else Color.Transparent).clickable { onUpdateAudioQuality(quality) }.padding(vertical = 8.dp), Alignment.Center) { Text(quality.substringBefore(" "), fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) BgDark else TextSecondary, fontSize = 11.sp) } }
       }
-
-      Spacer(modifier = Modifier.height(14.dp))
-
-      // Shake to skip
-      SettingsToggleRow(
-        icon = Icons.Default.PhoneAndroid,
-        title = "Shake to Skip Track",
-        subtitle = "Skip to next song by shaking your device",
-        isChecked = settings.shakeToSkipEnabled,
-        onCheckedChange = onToggleShakeToSkip
-      )
-
-      Spacer(modifier = Modifier.height(10.dp))
-
-      // Synced lyrics auto scroll
-      SettingsToggleRow(
-        icon = Icons.Default.Lyrics,
-        title = "Synced Lyrics Real-Time Scroll",
-        subtitle = "Automatically follow and highlight active lines",
-        isChecked = settings.lyricsAutoScroll,
-        onCheckedChange = onToggleLyricsAutoScroll
-      )
-
-      Spacer(modifier = Modifier.height(10.dp))
-
-      // 60FPS Visualizer Acceleration
-      SettingsToggleRow(
-        icon = Icons.Default.GraphicEq,
-        title = "3D Visualizer 60 FPS Mode",
-        subtitle = "Smooth high-frequency canvas GPU rendering",
-        isChecked = settings.visualizer60fps,
-        onCheckedChange = onToggleVisualizer60fps
-      )
-
-      Spacer(modifier = Modifier.height(16.dp))
-
-      // Storage & Cache
-      SettingsSectionTitle(title = "STORAGE & OFFLINE")
-
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(14.dp))
-          .background(SurfaceCard)
-          .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
-          .padding(14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Column {
-          Text("Cached Audio & Artworks", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-          Text("%.1f MB used".format(settings.offlineCacheSizeMb), color = TextMuted, fontSize = 12.sp)
-        }
-
-        TextButton(
-          onClick = onClearCache,
-          modifier = Modifier.testTag("clear_cache_button")
-        ) {
-          Icon(Icons.Default.Cached, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(18.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Clear", color = SpotifyGreen, fontWeight = FontWeight.Bold)
-        }
+      Spacer(Modifier.height(16.dp))
+      SettingsSectionTitle("PLAYBACK")
+      Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(14.dp)).padding(14.dp)) {
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text("Crossfade", color = TextPrimary, fontWeight = FontWeight.SemiBold); Text("${settings.crossfadeSec}s", color = SpotifyGreen, fontWeight = FontWeight.Bold) }
+        Slider(value = settings.crossfadeSec.toFloat(), onValueChange = { onUpdateCrossfade(it.toInt()) }, valueRange = 0f..12f, steps = 11, colors = SliderDefaults.colors(thumbColor = SpotifyGreen, activeTrackColor = SpotifyGreen, inactiveTrackColor = SurfaceElevated))
       }
-
-      Spacer(modifier = Modifier.height(20.dp))
-
-      // About
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(14.dp))
-          .background(SurfaceElevated)
-          .padding(14.dp)
-      ) {
-        Column {
-          Text("SpotiFusion Android v2.4.0", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-          Text("Connected to Spotifusion Web Audio & LRCLIB Core", color = TextMuted, fontSize = 11.sp)
-        }
+      Spacer(Modifier.height(10.dp))
+      SettingsToggleRow(Icons.Default.PhoneAndroid, "Shake to Skip Track", "Skip to the next song by shaking the device", settings.shakeToSkipEnabled, onToggleShakeToSkip)
+      Spacer(Modifier.height(10.dp))
+      SettingsToggleRow(Icons.Default.Lyrics, "Synced Lyrics Auto Scroll", "Follow the active lyric line while playing", settings.lyricsAutoScroll, onToggleLyricsAutoScroll)
+      Spacer(Modifier.height(10.dp))
+      SettingsToggleRow(Icons.Default.GraphicEq, "High FPS Visualizer", "Use the faster visualizer animation cadence", settings.visualizer60fps, onToggleVisualizer60fps)
+      Spacer(Modifier.height(10.dp))
+      SettingsToggleRow(Icons.Default.Notifications, "Download Notifications", "Notify when an offline download finishes", settings.notificationsEnabled, onToggleNotifications)
+      Spacer(Modifier.height(16.dp))
+      SettingsSectionTitle("STORAGE")
+      Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(14.dp)).padding(14.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+        Column { Text("App Cache", color = TextPrimary, fontWeight = FontWeight.SemiBold); Text("%.1f MB used".format(settings.offlineCacheSizeMb), color = TextMuted, fontSize = 12.sp) }
+        TextButton(onClick = onClearCache, modifier = Modifier.testTag("clear_cache_button")) { Icon(Icons.Default.Cached, null, tint = SpotifyGreen, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Clear", color = SpotifyGreen, fontWeight = FontWeight.Bold) }
       }
+      Spacer(Modifier.height(20.dp))
+      Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceElevated).padding(14.dp)) { Column { Text("SpotiFusion Android", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text("Playback, offline music, lyrics and equalizer", color = TextMuted, fontSize = 11.sp) } }
     }
   }
 }
 
-@Composable
-private fun SettingsSectionTitle(title: String) {
-  Text(
-    text = title,
-    style = MaterialTheme.typography.labelSmall,
-    color = SpotifyGreen,
-    fontWeight = FontWeight.Bold,
-    letterSpacing = 1.sp,
-    fontSize = 11.sp,
-    modifier = Modifier.padding(vertical = 6.dp)
-  )
+@Composable private fun ThemeOption(icon: ImageVector, title: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+  Row(modifier.clip(RoundedCornerShape(10.dp)).background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent).clickable(onClick = onClick).padding(vertical = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) { Icon(icon, title, tint = if (selected) MaterialTheme.colorScheme.onPrimary else TextSecondary, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text(title, color = if (selected) MaterialTheme.colorScheme.onPrimary else TextSecondary, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 13.sp) }
 }
 
-@Composable
-private fun SettingsToggleRow(
-  icon: ImageVector,
-  title: String,
-  subtitle: String,
-  isChecked: Boolean,
-  onCheckedChange: (Boolean) -> Unit
-) {
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(14.dp))
-      .background(SurfaceCard)
-      .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
-      .padding(14.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    Row(
-      modifier = Modifier.weight(1f),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      Box(
-        modifier = Modifier
-          .size(36.dp)
-          .clip(CircleShape)
-          .background(SurfaceElevated),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(icon, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(20.dp))
-      }
-      Spacer(modifier = Modifier.width(12.dp))
-      Column {
-        Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        Text(subtitle, color = TextMuted, fontSize = 11.sp)
-      }
-    }
+@Composable private fun SettingsSectionTitle(title: String) { Text(title, style = MaterialTheme.typography.labelSmall, color = SpotifyGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp)) }
 
-    Switch(
-      checked = isChecked,
-      onCheckedChange = onCheckedChange,
-      colors = SwitchDefaults.colors(
-        checkedThumbColor = BgDark,
-        checkedTrackColor = SpotifyGreen,
-        uncheckedThumbColor = TextMuted,
-        uncheckedTrackColor = SurfaceElevated
-      )
-    )
+@Composable private fun SettingsToggleRow(icon: ImageVector, title: String, subtitle: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+  Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(14.dp)).padding(14.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(36.dp).clip(CircleShape).background(SurfaceElevated), Alignment.Center) { Icon(icon, null, tint = SpotifyGreen, modifier = Modifier.size(20.dp)) }; Spacer(Modifier.width(12.dp)); Column { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(subtitle, color = TextMuted, fontSize = 11.sp) } }
+    Switch(checked = isChecked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = BgDark, checkedTrackColor = SpotifyGreen, uncheckedThumbColor = TextMuted, uncheckedTrackColor = SurfaceElevated))
   }
 }
