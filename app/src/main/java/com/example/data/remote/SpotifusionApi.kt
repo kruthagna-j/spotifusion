@@ -23,7 +23,8 @@ interface SpotifusionApi {
 
   @GET("api/stream/{videoId}")
   suspend fun getStream(
-    @Path("videoId") videoId: String
+    @Path("videoId") videoId: String,
+    @Query("quality") quality: String = "High (320kbps)"
   ): StreamResponse
 
   @GET("api/lyrics/{videoId}")
