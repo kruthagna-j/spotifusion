@@ -1,91 +1,32 @@
-# Spotifusion music-search backend
+# SpotiFusion Android
 
-Free, key-less alternative to the official YouTube Data API. Uses
-[ytmusicapi](https://github.com/sigma67/ytmusicapi) (unofficial, unauthenticated
-access to YouTube Music's public search) so search has no Google API quota or
-billing dependency at all.
+Minimal music player built from the current Google AI Studio Android project.
 
-```
-api/
-├── main.py              FastAPI app: routes, CORS, rate limiting
-├── cache.py              Redis wrapper (degrades gracefully if Redis is down)
-├── requirements.txt
-├── Dockerfile
-└── services/
-    └── ytmusic.py        ytmusicapi wrapper, normalizes results
-```
+AI Studio app: https://ai.studio/apps/9882d535-c2a3-49b0-b19b-368e50c9f000
 
-This is a **standalone service**, not a Vercel serverless function — it needs
-a persistent Redis connection and is meant to scale horizontally (multiple
-containers behind a load balancer), which doesn't fit Vercel's per-request
-serverless model. `.vercelignore` keeps these files out of the frontend's
-Vercel deploy so they don't collide with it.
+## Highlights
+
+- Dark AMOLED and pure white light themes
+- Persistent user theme selection
+- Minimal Material 3 UI with real vector controls
+- Media3 background playback and media session
+- Play/pause, seek, next/previous, shuffle, repeat and volume
+- Crossfade playback
+- 5-band equalizer with persistent settings
+- Synced lyrics with configurable auto-scroll
+- High-FPS visualizer mode
+- Local music library and playlists
+- Likes and listening history
+- Offline downloads and offline playback
+- Download notifications with Android 13+ permission handling
+- Real cache size calculation and cache clearing
+- Quality-aware online stream resolution
 
 ## Run locally
 
-```bash
-cd api
-python3 -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env            # defaults are fine for local dev
-uvicorn main:app --reload --port 8000
-```
+1. Open this project in Android Studio.
+2. Let Android Studio sync the Gradle project.
+3. Configure Firebase/Gemini credentials as required by the project.
+4. Run the `app` configuration on an emulator or physical Android device.
 
-Then test it:
-
-```bash
-curl http://localhost:8000/
-curl "http://localhost:8000/api/search?q=Blinding%20Lights"
-```
-
-Redis is optional locally — if it's not running, you'll see a logged warning
-("Redis unavailable ... continuing without cache") and search still works,
-just uncached.
-
-To run Redis locally too: `docker run -p 6379:6379 redis:7-alpine`
-
-## Deploy
-
-Any host that runs a long-lived Python process works — Render, Railway,
-Fly.io, a plain VPS, or the included `Dockerfile`:
-
-```bash
-docker build -t spotifusion-api .
-docker run -p 8000:8000 --env-file .env spotifusion-api
-```
-
-For horizontal scaling, run several containers (or platform instances) all
-pointed at the **same** `REDIS_URL` (e.g. a managed Redis add-on — Render,
-Railway, and Upstash all have free tiers) behind a load balancer. The app has
-no in-memory state that matters across requests, so any instance can serve
-any request.
-
-After deploying, set `VITE_MUSIC_API_URL` in the frontend's environment
-(Vercel dashboard) to the deployed URL, e.g. `https://your-api.onrender.com`.
-
-## Environment variables
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated list of origins allowed to call this API (CORS) |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string; safe to leave unset/wrong — falls back to no caching |
-| `CACHE_TTL` | `3600` | Seconds a cached search/song result is kept |
-| `RATE_LIMIT_PER_MINUTE` | `60` | Per-client (by IP) request budget |
-
-## Endpoints
-
-- `GET /` — health check
-- `GET /api/search?q=...` — search songs, returns `{ query, results, cached }`
-- `GET /api/song/{video_id}` — single track metadata lookup
-
-Lyrics are wired through `/api/lyrics/{video_id}` and cached. Artist/album/playlist pages remain frontend-derived from catalog results.
-
-## Limitations
-
-- This is unofficial access to YouTube Music, not a licensed API — it can
-  break if YouTube changes its internal endpoints, and is still subject to
-  YouTube's own rate limiting/blocking of automated traffic at scale. Redis
-  caching and the built-in rate limiter both help reduce how often you hit
-  upstream, but neither guarantees unlimited or unbreakable access.
-- No lyrics/artist/album pages are wired up (see above).
+The current repository also contains the existing Spotifusion web player and API under `src/` and `api/` respectively.
