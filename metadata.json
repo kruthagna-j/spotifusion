@@ -1,0 +1,6 @@
+{
+  "name": "SpotiFusion",
+  "description": "A modern liquid-glass music streaming player with playlist blending, discovery, audio visualizer, and 5-band equalizer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
