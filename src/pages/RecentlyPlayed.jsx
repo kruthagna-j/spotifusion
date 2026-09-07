@@ -1,27 +1,81 @@
-import { Play, Clock3, Music2 } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
 import { useRecentlyPlayedStatus } from '@/hooks/useLibraryData'
+import { useAuth } from '@/context/AuthContext'
 import { usePlayer } from '@/context/PlayerContext'
+import { Clock, Play, Shuffle } from 'lucide-react'
 import TrackRow from '@/components/TrackRow'
-import { Link } from 'react-router-dom'
+import { SkeletonRowList } from '@/components/Skeleton'
 
 export default function RecentlyPlayed() {
   const { user, signIn } = useAuth()
   const { data: tracks, loading } = useRecentlyPlayedStatus(user?.uid, 50)
   const player = usePlayer()
-  if (!user) return <EmptySignIn signIn={signIn} />
-  return <div className="p-4 md:p-7 max-w-6xl mx-auto">
-    <div className="flex items-end justify-between mb-7">
-      <div>
-        <p className="text-xs uppercase tracking-[.2em] text-text-subdued font-bold">History</p>
-        <h1 className="text-3xl md:text-4xl font-black mt-1">Recently Played</h1>
-        <p className="text-sm text-text-muted mt-2">Jump back into the music you played recently.</p>
+
+  function playShuffled() {
+    if (!tracks.length) return
+    const shuffled = [...tracks].sort(() => Math.random() - 0.5)
+    if (!player.shuffle) player.toggleShuffle()
+    player.playTrack(shuffled[0], shuffled)
+  }
+
+  return (
+    <div>
+      <div className="flex items-end gap-6 p-6 bg-gradient-to-b from-surface-elevated to-transparent">
+        <div className="w-32 h-32 md:w-48 md:h-48 rounded-md shadow-card bg-gradient-to-br from-surface-elevated to-surface-highlight flex items-center justify-center shrink-0">
+          <Clock size={56} className="text-text-muted" aria-hidden="true" />
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase">Playlist</p>
+          <h1 className="text-3xl md:text-6xl font-black my-2">Recently Played</h1>
+          <p className="text-text-muted text-sm">{tracks.length} songs</p>
+        </div>
       </div>
-      {tracks.length > 0 && <button onClick={() => player.playTrack(tracks[0], tracks)} className="hidden sm:flex items-center gap-2 bg-brand text-black font-black px-5 py-3 rounded-full"><Play size={18} fill="currentColor"/> Play latest</button>}
+
+      <div className="p-4 md:p-6">
+        {tracks.length > 0 && (
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => player.playTrack(tracks[0], tracks)}
+              aria-label="Play Recently Played"
+              className="w-14 h-14 rounded-full bg-brand text-black flex items-center justify-center hover:scale-105 hover:bg-brand-hover transition-transform"
+            >
+              <Play size={24} className="ml-1" />
+            </button>
+            <button
+              onClick={playShuffled}
+              aria-label="Shuffle play"
+              aria-pressed={player.shuffle}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                player.shuffle ? 'text-brand' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              <Shuffle size={22} />
+            </button>
+          </div>
+        )}
+
+        {!user && (
+          <div className="text-center pt-10">
+            <Clock size={40} className="mx-auto mb-3 text-text-subdued" />
+            <p className="text-text-muted text-sm mb-4">Sign in to see your recently played tracks.</p>
+            <button onClick={signIn} className="bg-brand text-black font-bold px-6 py-2.5 rounded-full">
+              Sign in with Google
+            </button>
+          </div>
+        )}
+
+        {user && loading && <SkeletonRowList count={8} />}
+
+        {user && !loading && tracks.length === 0 && (
+          <div className="text-center py-16">
+            <Clock size={40} className="mx-auto mb-3 text-text-subdued" aria-hidden="true" />
+            <p className="text-text-muted text-sm">Songs you play will appear here.</p>
+          </div>
+        )}
+
+        {!loading && tracks.map((track, i) => (
+          <TrackRow key={track.id} track={track} index={i} contextTracks={tracks} />
+        ))}
+      </div>
     </div>
-    {loading ? <div className="space-y-2">{Array.from({length:8}).map((_,i)=><div className="h-14 rounded-xl bg-white/5 animate-pulse" key={i}/>)}</div>
-      : tracks.length ? <div className="space-y-1">{tracks.map((t,i)=><TrackRow key={t.id} track={t} index={i} contextTracks={tracks}/>)}</div>
-      : <div className="sf-panel p-12 text-center"><Clock3 className="mx-auto mb-4 text-text-subdued" size={40}/><h2 className="font-bold text-lg">Nothing here yet</h2><p className="text-sm text-text-muted mt-2">Play a song and it will appear here.</p><Link to="/search" className="inline-flex mt-5 bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm">Find music</Link></div>}
-  </div>
+  )
 }
-function EmptySignIn({signIn}) { return <div className="p-8 text-center max-w-md mx-auto mt-16"><Music2 className="mx-auto mb-4 text-text-subdued" size={44}/><h1 className="text-2xl font-black">Sign in to see your history</h1><p className="text-sm text-text-muted mt-2">Your recently played music is synced to your Spotifusion account.</p><button onClick={signIn} className="mt-6 bg-brand text-black font-bold px-6 py-3 rounded-full">Sign in with Google</button></div> }

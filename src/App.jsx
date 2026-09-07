@@ -1,84 +1,67 @@
-import { Link, useLocation, Navigate } from 'react-router-dom'
 import { Routes, Route } from 'react-router-dom'
-import { useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
 import TopBar from '@/components/TopBar'
 import PlayerBar from '@/components/PlayerBar'
 import MobileNav from '@/components/MobileNav'
-import ReferenceNowPlaying from '@/components/ReferenceNowPlaying'
+import AuxPane from '@/components/AuxPane'
 import Home from '@/pages/Home'
-import Search from '@/pages/SearchStable2'
+import Search from '@/pages/Search'
 import LibraryMobile from '@/pages/LibraryMobile'
 import LikedSongs from '@/pages/LikedSongs'
 import Playlist from '@/pages/Playlist'
 import LocalFiles from '@/pages/LocalFiles'
 import Settings from '@/pages/Settings'
-import Equalizer from '@/pages/Equalizer'
 import RecentlyPlayed from '@/pages/RecentlyPlayed'
-import Discover from '@/pages/Discover'
-import Collection from '@/pages/Collection'
-import YouTubePlaylist from '@/pages/YouTubePlaylist'
-import NowPlayingRoute from '@/pages/NowPlayingRoute'
-import Login from '@/pages/Login'
-import Onboarding from '@/pages/Onboarding'
-import Account from '@/pages/Account'
-import { useAuth } from '@/context/AuthContext'
+import Queue from '@/pages/Queue'
+import Artist from '@/pages/Artist'
+import Album from '@/pages/Album'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-import { warmMusicService } from '@/lib/musicApi'
+import { useAuxPane } from '@/context/AuxPaneContext'
+import { usePlayer } from '@/context/PlayerContext'
 
 export default function App() {
   useKeyboardShortcuts()
   const online = useOnlineStatus()
-  const location = useLocation()
-  const { user, profile, authLoading } = useAuth()
-  const standalone = location.pathname === '/login' || location.pathname === '/onboarding'
+  const { auxOpen } = useAuxPane()
+  const { currentTrack } = usePlayer()
 
-  useEffect(() => {
-    if (!user || !online || standalone) return
-    let cancelled = false
-    const warm = () => { if (!cancelled && navigator.onLine) warmMusicService() }
-    warm()
-    const timer = window.setInterval(warm, 4 * 60 * 1000)
-    const onVisible = () => { if (document.visibilityState === 'visible') warm() }
-    const onOnline = () => warm()
-    document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('online', onOnline)
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('online', onOnline) }
-  }, [user, online, standalone])
+  return (
+    <div className="h-screen flex flex-col bg-bg text-text overflow-hidden">
+      {!online && (
+        <div className="shrink-0 bg-yellow-600/90 text-black text-xs font-semibold text-center py-1.5 px-4">
+          You're offline. Your downloaded/local songs are still available — online search and
+          streaming need a connection.
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0">
+        <Sidebar />
 
-  if (authLoading) return <div className="h-screen grid place-items-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
-  if (!user && !standalone) return <Navigate to="/login" replace />
-  if (!user && location.pathname === '/onboarding') return <Navigate to="/login" replace />
-  if (user && !profile?.onboardingComplete && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
-  if (standalone) return <Routes><Route path="/login" element={<Login />} /><Route path="/onboarding" element={<Onboarding />} /></Routes>
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-none">
+          <TopBar />
+          <main className="flex-1 pb-4">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/library" element={<LibraryMobile />} />
+              <Route path="/liked-songs" element={<LikedSongs />} />
+              <Route path="/playlist/:id" element={<Playlist />} />
+              <Route path="/local-files" element={<LocalFiles />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/recently-played" element={<RecentlyPlayed />} />
+              <Route path="/queue" element={<Queue />} />
+              <Route path="/artist/:name" element={<Artist />} />
+              <Route path="/album/:name" element={<Album />} />
+            </Routes>
+          </main>
+        </div>
 
-  return <div className="liquid-glass h-screen flex flex-col overflow-hidden bg-bg text-text">
-    {!online && <div className="shrink-0 bg-yellow-600/90 text-black text-xs font-semibold text-center py-1.5 px-4">You're offline. Your downloaded/local songs are still available — online search and streaming need a connection.</div>}
-    <div className="flex flex-1 min-h-0"><Sidebar/><div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden"><TopBar/><main className="flex-1 min-h-0 overflow-y-auto scrollbar-none pb-36 md:pb-6 overscroll-contain">
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/account" element={<Account />} />
-        <Route path="/search" element={<Search />} />
-        <Route path="/library" element={<LibraryMobile />} />
-        <Route path="/liked-songs" element={<LikedSongs />} />
-        <Route path="/playlist/:id" element={<Playlist />} />
-        <Route path="/local-files" element={<LocalFiles />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/equalizer" element={<Equalizer />} />
-        <Route path="/recently-played" element={<RecentlyPlayed />} />
-        <Route path="/discover" element={<Discover />} />
-        <Route path="/artist/:value" element={<Collection type="artist" />} />
-        <Route path="/album/:value" element={<Collection type="album" />} />
-        <Route path="/youtube-playlist/:id" element={<YouTubePlaylist />} />
-        <Route path="/now-playing" element={<NowPlayingRoute />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </main></div></div>
-    <PlayerBar/>
-    <ReferenceNowPlaying/>
-    <MobileNav/>
-  </div>
+        {/* Right-side auxiliary pane — desktop only, shown when a track is playing */}
+        {currentTrack && auxOpen && <AuxPane />}
+      </div>
+
+      <PlayerBar />
+      <MobileNav />
+    </div>
+  )
 }
-
-function NotFound() { return <div className="min-h-full grid place-items-center p-8 text-center"><div className="max-w-md"><p className="text-brand text-xs font-black uppercase tracking-[.25em]">Spotifusion</p><h1 className="text-5xl font-black mt-3">Page not found</h1><p className="text-text-muted mt-3">That destination does not exist. Go back home and keep listening.</p><Link to="/" className="inline-flex mt-6 bg-brand text-black font-black px-6 py-3 rounded-full">Back to Home</Link></div></div> }

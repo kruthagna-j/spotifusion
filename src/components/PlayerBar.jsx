@@ -14,20 +14,22 @@ import {
   ListMusic,
   Cast,
   Moon,
+  PanelRight,
 } from 'lucide-react'
 import { usePlayer } from '@/context/PlayerContext'
 import { useAuth } from '@/context/AuthContext'
+import { useAuxPane } from '@/context/AuxPaneContext'
 import { likeSong, unlikeSong } from '@/lib/library'
 import { useLikedSongs } from '@/hooks/useLibraryData'
 import { formatTime } from '@/lib/timeFormat'
 import QueuePanel from '@/components/QueuePanel'
-import { getArtwork } from '@/lib/artwork'
 import NowPlaying from '@/components/NowPlaying'
 
 export default function PlayerBar() {
   const player = usePlayer()
   const { user } = useAuth()
   const liked = useLikedSongs(user?.uid)
+  const { auxOpen, toggleAux } = useAuxPane()
   const [queueOpen, setQueueOpen] = useState(false)
   const [sleepOpen, setSleepOpen] = useState(false)
   const { currentTrack } = player
@@ -47,19 +49,30 @@ export default function PlayerBar() {
           just above the bottom nav, matching the Figma reference (NowPlaying
           node: rounded-[10px], margin from screen edges, sits right above
           the tab bar) rather than a flush full-width bar. */}
-      <div className="mobile-mini-player md:hidden">
-        <div className="mobile-mini-player-card">
-          <button onClick={() => player.openNowPlaying()} className="flex items-center gap-3 min-w-0 flex-1 text-left" aria-label={`Now playing: ${currentTrack.title} by ${currentTrack.artist}. Tap to expand.`}>
-            <img src={getArtwork(currentTrack, 'medium')} alt="" className="w-10 h-10 rounded-[7px] object-cover shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm truncate">{currentTrack.title}</span>
-              <span className="block text-xs text-text-muted truncate">{currentTrack.artist}</span>
-            </span>
-          </button>
-          <button onClick={player.togglePlay} aria-label={player.isPlaying ? 'Pause' : 'Play'} className="control-button control-button-sm shrink-0">
-            {player.isPlaying ? <Pause size={20} /> : <Play size={20} />}
-          </button>
-        </div>
+      <div className="md:hidden px-2 pt-2 bg-bg">
+        <button
+          onClick={() => player.openNowPlaying()}
+          aria-label={`Now playing: ${currentTrack.title} by ${currentTrack.artist}. Tap to expand.`}
+          className="flex items-center gap-3 px-2 py-2 bg-surface-elevated rounded-[10px] shadow-card w-full text-left"
+        >
+          <img src={currentTrack.thumbnail} alt="" className="w-10 h-10 rounded-[6px] object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm truncate">{currentTrack.title}</p>
+            <p className="text-xs text-text-muted truncate">{currentTrack.artist}</p>
+          </div>
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            onClick={(e) => {
+              e.stopPropagation()
+              player.togglePlay()
+            }}
+            className="p-2 mr-1"
+          >
+            {player.isPlaying ? <Pause size={22} /> : <Play size={22} />}
+          </span>
+        </button>
       </div>
 
       <NowPlaying />
@@ -67,7 +80,7 @@ export default function PlayerBar() {
       {/* Desktop player bar */}
       <div className="hidden md:grid grid-cols-3 items-center px-4 h-[90px] bg-surface border-t border-border">
         <div className="flex items-center gap-3 min-w-0">
-          <img src={getArtwork(currentTrack, 'medium')} alt="" className="w-14 h-14 rounded object-cover" />
+          <img src={currentTrack.thumbnail} alt="" className="w-14 h-14 rounded object-cover" />
           <button
             onClick={() => player.openNowPlaying()}
             className="min-w-0 text-left"
@@ -94,28 +107,28 @@ export default function PlayerBar() {
               onClick={player.toggleShuffle}
               aria-label="Toggle shuffle"
               aria-pressed={player.shuffle}
-              className={`control-button control-button-sm ${player.shuffle ? 'is-active' : ''}`}
+              className={`cursor-pointer ${player.shuffle ? 'text-brand' : 'text-text-muted hover:text-text'}`}
             >
               <Shuffle size={16} />
             </button>
             <button
               onClick={player.playPrevious}
               aria-label="Previous track"
-              className="control-button control-button-sm"
+              className="cursor-pointer text-text-muted hover:text-text"
             >
               <SkipBack size={18} />
             </button>
             <button
               onClick={player.togglePlay}
               aria-label={player.isPlaying ? 'Pause' : 'Play'}
-              className="control-button control-button-play control-button-desktop"
+              className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform"
             >
               {player.isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
             </button>
             <button
               onClick={player.playNext}
               aria-label="Next track"
-              className="control-button control-button-sm"
+              className="cursor-pointer text-text-muted hover:text-text"
             >
               <SkipForward size={18} />
             </button>
@@ -206,8 +219,17 @@ export default function PlayerBar() {
             value={player.muted ? 0 : player.volume}
             onChange={(e) => player.changeVolume(Number(e.target.value))}
             aria-label="Volume"
-            className="w-24 accent-brand volume-slider"
+            className="w-24 accent-white"
           />
+          <button
+            onClick={toggleAux}
+            aria-label={auxOpen ? 'Close Now Playing panel' : 'Open Now Playing panel'}
+            aria-pressed={auxOpen}
+            title={auxOpen ? 'Close Now Playing panel' : 'Open Now Playing panel'}
+            className={auxOpen ? 'text-brand' : 'text-text-muted hover:text-text'}
+          >
+            <PanelRight size={18} />
+          </button>
         </div>
       </div>
     </>
@@ -229,7 +251,7 @@ function RepeatIcon({ player, small }) {
       onClick={player.cycleRepeat}
       aria-label={label}
       aria-pressed={active}
-      className={`control-button control-button-sm ${active ? 'is-active' : ''}`}
+      className={`cursor-pointer ${active ? 'text-brand' : 'text-text-muted hover:text-text'}`}
     >
       <Icon size={size} />
     </button>
@@ -247,7 +269,7 @@ function SeekBar({ player, compact }) {
         value={player.progress}
         onChange={(e) => player.seekTo(Number(e.target.value))}
         aria-label="Seek"
-        className="w-full accent-brand h-1 seek-slider"
+        className="w-full accent-white h-1"
       />
       {compact && <span className="text-[11px] text-text-subdued w-9">{formatTime(player.duration)}</span>}
       {!compact && (

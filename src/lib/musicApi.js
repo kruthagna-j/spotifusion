@@ -1,92 +1,111 @@
+// Client for the free, key-less search backend (see /api/main.py), which
+// uses ytmusicapi instead of the official (quota-limited) YouTube Data API.
+//
+// This backend is a standalone FastAPI + Redis service, NOT a Vercel
+// serverless function (Vercel serverless doesn't fit the Redis-backed,
+// horizontally-scalable design — see api/README.md) — so it needs its own
+// URL, configured via VITE_MUSIC_API_URL.
 import { auth } from '@/lib/firebase'
 
-const CONFIGURED_API_BASE = (import.meta.env.VITE_MUSIC_API_URL || '').replace(/\/$/, '')
-const DEFAULT_API_BASE = 'https://spotifusion.onrender.com'
-const API_BASES = [...new Set([CONFIGURED_API_BASE, DEFAULT_API_BASE].filter(Boolean))]
-if (import.meta.env.PROD && !CONFIGURED_API_BASE) console.warn('[Spotifusion] VITE_MUSIC_API_URL is not set; using the default Render music API.')
+const API_BASE = import.meta.env.VITE_MUSIC_API_URL || 'https://spotifusion.onrender.com'
 
-async function parseJsonSafe(res) { try { return await res.json() } catch { return null } }
-async function authHeaders(forceRefresh = false) { const user = auth.currentUser; if (!user) return {}; return { Authorization: `Bearer ${await user.getIdToken(forceRefresh)}` } }
-
-const SEARCH_CACHE_TTL = 10 * 60 * 1000
-const ENTITY_CACHE_TTL = 30 * 60 * 1000
-const DISCOVER_CACHE_TTL = 15 * 60 * 1000
-const MAX_SEARCH_CACHE = 128
-const MAX_ENTITY_CACHE = 256
-const MAX_DISCOVER_CACHE = 8
-const TRANSIENT_STATUS = new Set([408,425,429,500,502,503,504])
-const REQUEST_TIMEOUT_MS = 60000
-const searchCache = new Map(), songCache = new Map(), lyricsCache = new Map(), discoverCache = new Map(), inflight = new Map()
-function normalizedKey(v) { return v.trim().toLocaleLowerCase().replace(/\s+/g,' ') }
-function getCached(map,key,ttl){const e=map.get(key);if(!e)return null;if(Date.now()-e.time>=ttl){map.delete(key);return null}map.delete(key);map.set(key,e);return e.value}
-function setCached(map,key,value,max){map.delete(key);map.set(key,{time:Date.now(),value});while(map.size>max)map.delete(map.keys().next().value)}
-function coalesce(key,loader){const existing=inflight.get(key);if(existing)return existing;const promise=Promise.resolve().then(loader).finally(()=>inflight.delete(key));inflight.set(key,promise);return promise}
-function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
-async function fetchWithTimeout(url,options={},timeoutMs=REQUEST_TIMEOUT_MS){const controller=new AbortController();const sourceSignal=options.signal;if(sourceSignal?.aborted)throw new DOMException('Request aborted','AbortError');const onAbort=()=>controller.abort();sourceSignal?.addEventListener('abort',onAbort,{once:true});const timer=window.setTimeout(()=>controller.abort(),timeoutMs);try{return await fetch(url,{...options,signal:controller.signal})}catch(err){if(sourceSignal?.aborted)throw new DOMException('Request aborted','AbortError');if(controller.signal.aborted)throw new Error('Music service request timed out.');throw err}finally{window.clearTimeout(timer);sourceSignal?.removeEventListener('abort',onAbort)}}
-async function request(path,{signal}={}){if(!API_BASES.length)throw new Error('Music service is not configured.');let lastError=null,refreshedToken=false;for(let attempt=0;attempt<4;attempt++){for(const base of API_BASES){try{const response=await fetchWithTimeout(`${base}${path}`,{headers:await authHeaders(refreshedToken),signal,cache:'no-store'});const body=await parseJsonSafe(response);if(response.ok)return body;if(response.status===401&&!refreshedToken&&auth.currentUser){refreshedToken=true;break}lastError=new Error(body?.detail||`Music service request failed (${response.status}).`);if(!TRANSIENT_STATUS.has(response.status))throw lastError}catch(err){if(err?.name==='AbortError')throw err;lastError=err}}if(refreshedToken&&attempt===0)continue;if(attempt<3)await sleep(500*2**attempt)}throw lastError||new Error('Unable to reach the music service right now. Please try again.')}
-
-export async function searchMusic(query,{signal}={}){const q=query.trim();if(q.length<2)return[];if(!auth.currentUser)throw new Error('Sign in to search and stream music.');const key=normalizedKey(q);const cached=getCached(searchCache,key,SEARCH_CACHE_TTL);if(cached)return cached;const body=await coalesce(`search:${key}`,()=>request(`/api/search?q=${encodeURIComponent(q)}`,{signal}));if(!body||!Array.isArray(body.results))throw new Error('Unable to search right now. Please try again.');setCached(searchCache,key,body.results,MAX_SEARCH_CACHE);return body.results}
-
-const CATEGORY_TYPES={songs:new Set(['song','video']),albums:new Set(['album']),artists:new Set(['artist']),playlists:new Set(['playlist','jukebox','mix']),jukebox:new Set(['jukebox','mix'])}
-function filterCategoryResults(results,category){
-  if(category==='all')return results
-  const allowed=CATEGORY_TYPES[category]
-  if(!allowed)return results
-  return results.filter(x=>allowed.has(String(x?.resultType||x?.type||'').toLowerCase()))
+if (import.meta.env.PROD && !import.meta.env.VITE_MUSIC_API_URL) {
+  // Loud, not silent: a deployed build with no configured backend would
+  // otherwise fail every search with an opaque network error, and someone
+  // debugging it wouldn't know why. localhost is a dev-only fallback.
+  console.error(
+    '[Spotifusion] VITE_MUSIC_API_URL is not set in this production build — ' +
+      'search will try to reach https://spotifusion.onrender.com, which does not exist ' +
+      "for anyone but a developer's own machine. Set VITE_MUSIC_API_URL to " +
+      'your deployed backend URL in your hosting provider\'s environment variables.'
+  )
 }
 
-function normalizeCategoryResults(results,category){
-  if(!Array.isArray(results))return []
-  return results.map(item=>{
-    if(!item||typeof item!=='object')return null
-    const existing=String(item.resultType||item.type||'').toLowerCase()
-    const stableId=item.id||item.videoId||item.browseId||item.playlistId||item.albumId||item.artistId
-    if(!stableId)return null
-    const normalized={...item,id:stableId}
-    if(category==='songs' && (existing==='song'||existing==='video'||!existing)) return {...normalized,resultType:'song'}
-    if(category==='albums' && (existing==='album'||!existing)) return {...normalized,resultType:'album'}
-    if(category==='artists' && (existing==='artist'||!existing)) return {...normalized,resultType:'artist'}
-    if(category==='playlists' && (existing==='playlist'||existing==='jukebox'||existing==='mix'||!existing)) return {...normalized,resultType:existing==='jukebox'||existing==='mix'?'jukebox':'playlist'}
-    if(category==='jukebox' && (existing==='jukebox'||existing==='mix')) return {...normalized,resultType:'jukebox'}
-    return normalized
-  }).filter(Boolean)
+async function parseJsonSafe(res) {
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
 }
 
-export async function searchMusicPage(query,{category='all',batch=1,signal}={}){
-  const q=query.trim()
-  if(q.length<2)return{results:[],hasMore:false,batch,category}
-  if(!auth.currentUser)throw new Error('Sign in to search and stream music.')
+// The backend requires a signed-in Spotifusion account for search/song
+// lookups (enforced server-side in api/auth.py) — this attaches the
+// caller's Firebase ID token so those requests succeed.
+async function authHeaders() {
+  const user = auth.currentUser
+  if (!user) return {}
+  const token = await user.getIdToken()
+  return { Authorization: `Bearer ${token}` }
+}
 
-  const cacheKey=`page:${category}:${batch}:${normalizedKey(q)}`
-  const cached=getCached(searchCache,cacheKey,SEARCH_CACHE_TTL)
-  if(cached && Array.isArray(cached.results) && cached.results.length)return cached
+const SEARCH_CACHE_TTL = 5 * 60 * 1000
+const searchCache = new Map()
 
-  let body=await coalesce(`search-page:${cacheKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}&batch=${batch}`,{signal}))
-  let results=normalizeCategoryResults(Array.isArray(body?.results)?body.results:[],category)
-
-  if(!results.length&&category!=='all'){
-    const fallbackKey=`page:all:${batch}:${normalizedKey(q)}`
-    const fallback=await coalesce(`search-page:${fallbackKey}`,()=>request(`/api/search?q=${encodeURIComponent(q)}&category=all&batch=${batch}`,{signal}))
-    const mixed=Array.isArray(fallback?.results)?fallback.results:[]
-    results=filterCategoryResults(mixed,category).map(item=>{
-      const id=item?.id||item?.videoId||item?.browseId||item?.playlistId||item?.albumId||item?.artistId
-      return id ? {...item,id} : null
-    }).filter(Boolean)
-    if(category==='songs' && !results.length){
-      results=mixed.filter(x=>x?.id||x?.videoId).map(x=>({...x,resultType:'song',id:x.id||x.videoId}))
-    }
-    body={...fallback,category}
+/**
+ * Search for songs via the Spotifusion backend (ytmusicapi under the hood).
+ * Returns an array of track objects already shaped for the existing player:
+ * { id, title, artist, album, duration, durationSeconds, thumbnail, source }
+ *
+ * Requires a signed-in user (see auth.py) — throws if called while signed
+ * out, rather than silently sending an unauthenticated request that the
+ * server would reject anyway.
+ *
+ * Never throws for "no results" (resolves to []). Throws only for genuine
+ * request failures, with a message safe to show directly to the user.
+ */
+export async function searchMusic(query, { signal } = {}) {
+  const q = query.trim()
+  if (!q) return []
+  if (!auth.currentUser) {
+    throw new Error('Sign in to search and stream music.')
   }
 
-  const result={results,hasMore:Boolean(body?.hasMore)&&results.length>0,available:Number.isFinite(body?.available)?body.available:results.length,batch:Number(body?.batch||batch),pageSize:Number(body?.pageSize||100),category}
-  if(results.length)setCached(searchCache,cacheKey,result,MAX_SEARCH_CACHE)
-  return result
+  const key = q.toLocaleLowerCase()
+  const cached = searchCache.get(key)
+  if (cached && Date.now() - cached.time < SEARCH_CACHE_TTL) {
+    return cached.results
+  }
+  if (cached) searchCache.delete(key)
+
+  let res
+  try {
+    res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}`, {
+      headers: await authHeaders(),
+      signal,
+    })
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err
+    throw new Error('Unable to search right now. Please try again.')
+  }
+
+  const body = await parseJsonSafe(res)
+
+  if (!res.ok) {
+    throw new Error(body?.detail || 'Unable to search right now. Please try again.')
+  }
+  if (!body || !Array.isArray(body.results)) {
+    throw new Error('Unable to search right now. Please try again.')
+  }
+
+  searchCache.set(key, { time: Date.now(), results: body.results })
+  return body.results
 }
 
-export async function getArtist(artistId){if(!artistId||!auth.currentUser)return null;const key=`artist:${artistId}`;const cached=getCached(songCache,key,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(key,()=>request(`/api/artist/${encodeURIComponent(artistId)}`));if(body)setCached(songCache,key,body,MAX_ENTITY_CACHE);return body}
-export async function getAlbum(albumId){if(!albumId||!auth.currentUser)return null;const key=`album:${albumId}`;const cached=getCached(songCache,key,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(key,()=>request(`/api/album/${encodeURIComponent(albumId)}`));if(body)setCached(songCache,key,body,MAX_ENTITY_CACHE);return body}
-export async function getPlaylist(playlistId){if(!playlistId||!auth.currentUser)return null;const key=`playlist:${playlistId}`;const cached=getCached(songCache,key,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(key,()=>request(`/api/playlist/${encodeURIComponent(playlistId)}`));if(body)setCached(songCache,key,body,MAX_ENTITY_CACHE);return body}
-export async function getSong(videoId){if(!videoId||!auth.currentUser)return null;const cached=getCached(songCache,videoId,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(`song:${videoId}`,()=>request(`/api/song/${encodeURIComponent(videoId)}`));if(body)setCached(songCache,videoId,body,MAX_ENTITY_CACHE);return body}
-export async function getLyrics(videoId){if(!videoId)return{available:false};if(!auth.currentUser)throw new Error('Sign in to see lyrics.');const cached=getCached(lyricsCache,videoId,ENTITY_CACHE_TTL);if(cached)return cached;const body=await coalesce(`lyrics:${videoId}`,()=>request(`/api/lyrics/${encodeURIComponent(videoId)}`));const result=body||{available:false};setCached(lyricsCache,videoId,result,MAX_ENTITY_CACHE);return result}
-export async function getDiscover({signal}={}){if(!auth.currentUser)return{sections:[]};const key='global';const cached=getCached(discoverCache,key,DISCOVER_CACHE_TTL);if(cached)return cached;const body=await coalesce('discover:global',()=>request('/api/discover',{signal}));const result=body||{sections:[]};setCached(discoverCache,key,result,MAX_DISCOVER_CACHE);return result}
-export async function warmMusicService(){if(!API_BASES.length)return false;for(const base of API_BASES){try{const response=await fetchWithTimeout(`${base}/health`,{cache:'no-store'},45000);if(response.ok)return true}catch{}}return false}
+/**
+ * Look up a single track's metadata by its YouTube video id. Requires a
+ * signed-in user, same as searchMusic.
+ */
+export async function getSong(videoId) {
+  if (!videoId || !auth.currentUser) return null
+  let res
+  try {
+    res = await fetch(`${API_BASE}/api/song/${encodeURIComponent(videoId)}`, {
+      headers: await authHeaders(),
+    })
+  } catch {
+    return null
+  }
+  if (!res.ok) return null
+  return parseJsonSafe(res)
+}

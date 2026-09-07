@@ -4,12 +4,16 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   signOut as fbSignOut,
   onAuthStateChanged,
-  updateProfile,
 } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,72 +28,61 @@ export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
-export const googleProvider = new GoogleAuthProvider()
+const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-function isMobileBrowser() {
-  if (typeof navigator === 'undefined') return false
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && window.matchMedia?.('(max-width: 767px)').matches)
+// Detect if we're running inside an Android WebView/TWA wrapper.
+// Popup auth is unreliable inside WebViews, so we fall back to redirect there.
+function isLikelyWebView() {
+  const ua = navigator.userAgent || ''
+  return /wv|Android.*Version\/[\d.]+.*Chrome\/[.\d]* (?!Mobile Safari)/.test(ua)
 }
 
 export async function signInWithGoogle() {
-  // Redirect is much more reliable than a popup in mobile browsers and
-  // embedded WebViews. Desktop keeps the fast popup experience.
-  if (isMobileBrowser()) return signInWithRedirect(auth, googleProvider)
-  return signInWithPopup(auth, googleProvider)
-}
-
-export async function completeGoogleRedirect() {
+  if (isLikelyWebView()) {
+    return signInWithRedirect(auth, googleProvider)
+  }
   try {
-    return await getRedirectResult(auth)
-  } catch (error) {
-    console.error('[Spotifusion] Google redirect sign-in failed:', error)
-    throw error
+    return await signInWithPopup(auth, googleProvider)
+  } catch (err) {
+    // Popups blocked (common on mobile browsers) -> fall back to redirect.
+    if (
+      err.code === 'auth/popup-blocked' ||
+      err.code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      return signInWithRedirect(auth, googleProvider)
+    }
+    throw err
   }
 }
 
-export function signOut() { return fbSignOut(auth) }
-export function watchAuth(callback) { return onAuthStateChanged(auth, callback) }
+export function signOut() {
+  return fbSignOut(auth)
+}
 
+export function watchAuth(callback) {
+  return onAuthStateChanged(auth, callback)
+}
+
+// Ensure a /users/{uid} profile doc exists, matching Spotify's "your library"
+// data model: liked songs, playlists, recently played all key off this doc.
 export async function ensureUserProfile(user) {
   const ref = doc(db, 'users', user.uid)
   const snap = await getDoc(ref)
   if (!snap.exists()) {
     await setDoc(ref, {
-      displayName: user.displayName || 'Spotifusion user',
-      email: user.email || '',
-      photoURL: user.photoURL || '',
-      language: 'English',
-      favoriteArtists: [],
-      onboardingComplete: false,
+      displayName: user.displayName,
+      email: user.email,
+      photoURL: user.photoURL,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     })
   }
   return ref
 }
 
-export async function getUserPreferences(uid) {
-  if (!uid) return null
-  const snap = await getDoc(doc(db, 'users', uid))
-  return snap.exists() ? snap.data() : null
-}
-
-export async function saveUserPreferences(uid, preferences) {
-  if (!uid) throw new Error('You must be signed in.')
-  await updateDoc(doc(db, 'users', uid), { ...preferences, updatedAt: serverTimestamp() })
-  return preferences
-}
-
-export async function updateUserDisplayName(name) {
-  if (!auth.currentUser) throw new Error('No signed-in user.')
-  const clean = String(name || '').trim()
-  if (!clean) throw new Error('Name cannot be empty.')
-  await updateProfile(auth.currentUser, { displayName: clean })
-  await setDoc(doc(db, 'users', auth.currentUser.uid), { displayName: clean, updatedAt: serverTimestamp() }, { merge: true })
-}
-
+// Permanently deletes the signed-in user's auth account. Firestore data
+// cleanup (playlists, likes, recently played) is handled separately by
+// deleteUserData() in library.js — call both together from the UI.
 export async function deleteCurrentUserAccount() {
   const { deleteUser } = await import('firebase/auth')
   if (!auth.currentUser) throw new Error('No signed-in user')

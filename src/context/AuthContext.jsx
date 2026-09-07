@@ -1,64 +1,64 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth, signInWithGoogle, completeGoogleRedirect, signOut as fbSignOut, ensureUserProfile, getUserPreferences } from '@/lib/firebase'
-import { warmMusicService } from '@/lib/musicApi'
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  auth,
+  signInWithGoogle,
+  signOut as fbSignOut,
+  ensureUserProfile,
+} from "../lib/firebase";
 
-const AuthContext = createContext(null)
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const signInInFlight = useRef(false)
 
   useEffect(() => {
-    let alive = true
-    completeGoogleRedirect().catch(() => null)
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!alive) return
-      setUser(currentUser)
+      setUser(currentUser);
       if (currentUser) {
-        // Render can suspend the API while idle. Wake it as soon as Firebase
-        // authentication is known so the first search/discovery request does
-        // not depend on a browser refresh.
-        warmMusicService().catch(() => null)
         try {
-          await ensureUserProfile(currentUser)
-          const data = await getUserPreferences(currentUser.uid)
-          if (alive) setProfile(data)
+          await ensureUserProfile(currentUser);
         } catch (err) {
-          console.error('[Spotifusion] Could not load user profile:', err)
-          if (alive) setProfile(null)
+          console.error("Error ensuring user profile: ", err);
         }
-      } else {
-        setProfile(null)
       }
-      if (alive) setLoading(false)
-    })
-    return () => { alive = false; unsubscribe() }
-  }, [])
+      setLoading(false); // 2. Stop loading once Firebase responds
+    });
+    return () => unsubscribe();
+  }, []);
 
   async function signIn() {
     if (signInInFlight.current) return
     signInInFlight.current = true
     try {
-      return await signInWithGoogle()
+      await signInWithGoogle()
     } finally {
+      // Firebase resolves/rejects once the popup is closed. This always
+      // releases the guard so a user can safely retry after cancelling.
       signInInFlight.current = false
     }
   }
 
   async function signOut() {
-    await fbSignOut()
-    setProfile(null)
+    await fbSignOut();
   }
 
+  // 3. Prevent rendering children until loading is finished (stops the flicker!)
   if (loading) {
-    return <div className="h-screen flex items-center justify-center bg-bg text-text-muted text-sm">Loading Spotifusion…</div>
+    return (
+      <div className="h-screen flex items-center justify-center bg-bg text-text-muted text-sm">
+        Loading Spotifusion…
+      </div>
+    );
   }
 
-  return <AuthContext.Provider value={{ user, profile, setProfile, signIn, signOut, authLoading: loading }}>{children}</AuthContext.Provider>
-}
+  return (
+    <AuthContext.Provider value={{ user, signIn, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-export const useAuth = () => useContext(AuthContext)
+export const useAuth = () => useContext(AuthContext);
