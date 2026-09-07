@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -34,29 +33,27 @@ object StreamResolver {
     "https://yt.drgnz.club"
   )
 
-  suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
+  suspend fun resolveStreamUrl(videoId: String, quality: String = "High (320kbps)"): String? = withContext(Dispatchers.IO) {
     if (videoId.isBlank()) return@withContext null
 
-    // Check cache
-    val cached = streamCache[videoId]
+    val cacheKey = "$videoId|$quality"
+    val cached = streamCache[cacheKey]
     if (cached != null && System.currentTimeMillis() < cached.expiresAt) {
       return@withContext cached.url
     }
 
-    // 1. Try Spotifusion Render Backend
     try {
-      val response = ApiClient.service.getStream(videoId)
+      val response = ApiClient.service.getStream(videoId, quality)
       val streamUrl = response.url
       if (!streamUrl.isNullOrBlank()) {
-        val ttlMs = 15 * 60 * 1000L // 15 min cache
-        streamCache[videoId] = CachedStream(streamUrl, System.currentTimeMillis() + ttlMs)
+        val ttlMs = 15 * 60 * 1000L
+        streamCache[cacheKey] = CachedStream(streamUrl, System.currentTimeMillis() + ttlMs)
         return@withContext streamUrl
       }
     } catch (e: Exception) {
       Log.w(TAG, "Backend stream resolver failed for $videoId: ${e.message}")
     }
 
-    // 2. Try Invidious Audio Stream endpoints
     for (instance in INVIDIOUS_INSTANCES) {
       try {
         val req = Request.Builder()
@@ -68,11 +65,14 @@ object StreamResolver {
         if (resp.isSuccessful) {
           val jsonStr = resp.body?.string() ?: continue
           val json = JSONObject(jsonStr)
-
-          // Try adaptiveFormats (audio only)
           val adaptive = json.optJSONArray("adaptiveFormats")
           var bestAudioUrl: String? = null
-          var maxBitrate = 0
+          var bestScore = Long.MAX_VALUE
+          val targetBitrate = when {
+            quality.startsWith("Normal") -> 160_000
+            quality.startsWith("High") -> 320_000
+            else -> 512_000
+          }
 
           if (adaptive != null) {
             for (i in 0 until adaptive.length()) {
@@ -81,16 +81,19 @@ object StreamResolver {
               if (type.startsWith("audio/")) {
                 val bitrate = item.optInt("bitrate", 0)
                 val url = item.optString("url", "")
-                if (url.isNotBlank() && bitrate >= maxBitrate) {
-                  maxBitrate = bitrate
-                  bestAudioUrl = url
+                if (url.isNotBlank() && bitrate > 0) {
+                  val score = kotlin.math.abs(bitrate - targetBitrate).toLong()
+                  if (score < bestScore) {
+                    bestScore = score
+                    bestAudioUrl = url
+                  }
                 }
               }
             }
           }
 
           if (bestAudioUrl != null) {
-            streamCache[videoId] = CachedStream(bestAudioUrl, System.currentTimeMillis() + 10 * 60 * 1000L)
+            streamCache[cacheKey] = CachedStream(bestAudioUrl, System.currentTimeMillis() + 10 * 60 * 1000L)
             return@withContext bestAudioUrl
           }
         }
@@ -100,5 +103,9 @@ object StreamResolver {
     }
 
     null
+  }
+
+  fun clearCache() {
+    streamCache.clear()
   }
 }
