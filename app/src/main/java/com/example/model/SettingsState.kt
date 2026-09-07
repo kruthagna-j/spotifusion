@@ -6,6 +6,7 @@ data class SettingsState(
   val shakeToSkipEnabled: Boolean = true,
   val lyricsAutoScroll: Boolean = true,
   val visualizer60fps: Boolean = true,
-  val offlineCacheSizeMb: Float = 48.5f,
-  val notificationsEnabled: Boolean = true
+  val offlineCacheSizeMb: Float = 0f,
+  val notificationsEnabled: Boolean = true,
+  val darkTheme: Boolean = true
 )
