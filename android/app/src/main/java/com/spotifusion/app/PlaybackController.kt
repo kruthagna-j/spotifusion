@@ -37,19 +37,24 @@ object PlaybackController {
         controllerFuture = null
     }
 
-    private fun item(uri: String, title: String, artist: String, album: String? = null): MediaItem =
-        MediaItem.Builder().setUri(uri).setMediaMetadata(
+    private fun item(uri: String, title: String, artist: String, album: String? = null, mediaId: String = uri): MediaItem =
+        MediaItem.Builder().setUri(uri).setMediaId(mediaId).setMediaMetadata(
             MediaMetadata.Builder().setTitle(title).setArtist(artist).apply { album?.let { setAlbumTitle(it) } }.build()
         ).build()
 
-    fun play(uri: String, title: String, artist: String, album: String? = null) {
-        controller?.let { c -> c.setMediaItem(item(uri, title, artist, album)); c.prepare(); c.play() }
+    fun play(uri: String, title: String, artist: String, album: String? = null, mediaId: String = uri) {
+        controller?.let { c ->
+            val media = item(uri, title, artist, album, mediaId)
+            c.setMediaItem(media)
+            c.prepare()
+            c.play()
+        }
     }
 
     fun playTracks(tracks: List<LocalTrack>, startIndex: Int = 0) {
         val c = controller ?: return
         if (tracks.isEmpty()) return
-        val items = tracks.map { item(it.uri.toString(), it.title, it.artist, it.album) }
+        val items = tracks.map { item(it.uri.toString(), it.title, it.artist, it.album, it.id.toString()) }
         val index = startIndex.coerceIn(0, items.lastIndex)
         c.setMediaItems(items, index, 0L)
         c.prepare()
