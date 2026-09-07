@@ -1,5 +1,6 @@
 package com.example
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -70,85 +73,45 @@ sealed class NavDestination(val route: String, val label: String, val icon: Imag
 }
 
 class MainActivity : ComponentActivity() {
-
   private val viewModel: MusicViewModel by viewModels()
   private var shakeDetector: ShakeDetector? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
-
-    try {
-      com.example.service.PlaybackController.connect(this)
-    } catch (e: Exception) {
-      android.util.Log.e("MainActivity", "Gracefully handled PlaybackController connection: ${e.message}")
-    }
-
+    try { com.example.service.PlaybackController.connect(this) } catch (e: Exception) { android.util.Log.e("MainActivity", "PlaybackController connection: ${e.message}") }
     try {
       val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-      if (auth.currentUser == null) {
-        auth.signInAnonymously()
-          .addOnSuccessListener {
-            android.util.Log.d("MainActivity", "Firebase anonymous auth succeeded")
-          }
-          .addOnFailureListener { e ->
-            android.util.Log.w("MainActivity", "Firebase auth note: ${e.message}")
-          }
-      }
-    } catch (e: Exception) {
-      android.util.Log.w("MainActivity", "Firebase init note: ${e.message}")
-    }
-
-    shakeDetector = ShakeDetector(this) {
-      if (viewModel.settingsState.value.shakeToSkipEnabled) {
-        viewModel.nextTrack()
-      }
-    }
-
+      if (auth.currentUser == null) auth.signInAnonymously().addOnFailureListener { e -> android.util.Log.w("MainActivity", "Firebase auth: ${e.message}") }
+    } catch (e: Exception) { android.util.Log.w("MainActivity", "Firebase init: ${e.message}") }
+    shakeDetector = ShakeDetector(this) { if (viewModel.settingsState.value.shakeToSkipEnabled) viewModel.nextTrack() }
     setContent {
-      SpotiFusionTheme {
-        SpotiFusionApp(viewModel = viewModel)
-      }
+      val settingsState by viewModel.settingsState.collectAsStateWithLifecycle()
+      SpotiFusionTheme(darkTheme = settingsState.darkTheme) { SpotiFusionApp(viewModel) }
     }
   }
-
-  override fun onResume() {
-    super.onResume()
-    shakeDetector?.start()
-  }
-
-  override fun onPause() {
-    super.onPause()
-    shakeDetector?.stop()
-  }
-
-  override fun onDestroy() {
-    try {
-      com.example.service.PlaybackController.disconnect()
-    } catch (e: Exception) {
-      android.util.Log.e("MainActivity", "PlaybackController disconnect note: ${e.message}")
-    }
-    super.onDestroy()
-  }
+  override fun onResume() { super.onResume(); shakeDetector?.start() }
+  override fun onPause() { super.onPause(); shakeDetector?.stop() }
+  override fun onDestroy() { runCatching { com.example.service.PlaybackController.disconnect() }; super.onDestroy() }
 }
 
 @Composable
 fun SpotiFusionApp(viewModel: MusicViewModel) {
   var currentDestination by remember { mutableStateOf<NavDestination>(NavDestination.Home) }
-
   val playerState by viewModel.playerState.collectAsStateWithLifecycle()
   val likedTracks by viewModel.likedTracks.collectAsStateWithLifecycle()
   val playlists by viewModel.playlists.collectAsStateWithLifecycle()
   val recentHistory by viewModel.recentHistory.collectAsStateWithLifecycle()
   val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
   val catalogTracks by viewModel.catalogTracks.collectAsStateWithLifecycle()
+  val downloadedIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+  val downloadedTracks = remember(catalogTracks, localTracks, downloadedIds) { (catalogTracks + localTracks).distinctBy { it.id }.filter { it.id in downloadedIds } }
   val fusionBlends by viewModel.fusionBlends.collectAsStateWithLifecycle()
   val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
   val settingsState by viewModel.settingsState.collectAsStateWithLifecycle()
   val currentSyncedLyrics by viewModel.currentSyncedLyrics.collectAsStateWithLifecycle()
   val sleepTimerMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
   val sleepTimerRemainingSec by viewModel.sleepTimerRemainingSec.collectAsStateWithLifecycle()
-
   val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
   val selectedGenre by viewModel.selectedGenre.collectAsStateWithLifecycle()
   val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
@@ -158,260 +121,72 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val selectedPlaylist by viewModel.selectedPlaylist.collectAsStateWithLifecycle()
   val selectedPlaylistTracks by viewModel.selectedPlaylistTracks.collectAsStateWithLifecycle()
   val trackForPlaylistDialog by viewModel.trackForPlaylistDialog.collectAsStateWithLifecycle()
-
   val isCurrentTrackLiked = playerState.currentTrack?.let { viewModel.isTrackLiked(it.id) } ?: false
+  val navItems = listOf(NavDestination.Home, NavDestination.Search, NavDestination.Blends, NavDestination.Library, NavDestination.Equalizer)
 
-  val navItems = listOf(
-    NavDestination.Home,
-    NavDestination.Search,
-    NavDestination.Blends,
-    NavDestination.Library,
-    NavDestination.Equalizer
-  )
-
-    Scaffold(
-      modifier = Modifier.fillMaxSize(),
-      containerColor = BgDark,
-      contentWindowInsets = WindowInsets(0, 0, 0, 0),
-      bottomBar = {
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .background(SurfaceDark)
-            .navigationBarsPadding()
+  Scaffold(
+    modifier = Modifier.fillMaxSize(),
+    containerColor = BgDark,
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    bottomBar = {
+      Column(Modifier.fillMaxWidth().background(SurfaceDark).navigationBarsPadding()) {
+        if (playerState.currentTrack != null) MiniPlayerBar(
+          currentTrack = playerState.currentTrack, isPlaying = playerState.isPlaying,
+          currentPositionSec = playerState.currentPositionSec, durationSec = playerState.durationSec,
+          isLiked = isCurrentTrackLiked, onTogglePlayPause = viewModel::togglePlayPause,
+          onNextTrack = viewModel::nextTrack, onToggleLike = viewModel::toggleLike,
+          onClickBar = { viewModel.setNowPlayingExpanded(true) }
+        )
+        NavigationBar(
+          containerColor = SurfaceDark, contentColor = SpotifyGreen, tonalElevation = 0.dp,
+          windowInsets = WindowInsets(0, 0, 0, 0), modifier = Modifier.fillMaxWidth().border(1.dp, GlassBorder).height(64.dp).testTag("main_bottom_nav_bar")
         ) {
-          // Floating Mini Player Bar if a track is active
-          if (playerState.currentTrack != null) {
-            MiniPlayerBar(
-              currentTrack = playerState.currentTrack,
-              isPlaying = playerState.isPlaying,
-              currentPositionSec = playerState.currentPositionSec,
-              durationSec = playerState.durationSec,
-              isLiked = isCurrentTrackLiked,
-              onTogglePlayPause = { viewModel.togglePlayPause() },
-              onNextTrack = { viewModel.nextTrack() },
-              onToggleLike = { viewModel.toggleLike(it) },
-              onClickBar = { viewModel.setNowPlayingExpanded(true) }
+          navItems.forEach { item ->
+            val selected = currentDestination.route == item.route
+            NavigationBarItem(
+              selected = selected,
+              onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
+              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent).border(if (selected) 1.dp else 0.dp, if (selected) SpotifyGreen.copy(alpha = .28f) else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(14.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(item.icon, item.label, Modifier.size(if (selected) 23.dp else 22.dp)) } },
+              label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
+              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, unselectedIconColor = TextSecondary.copy(alpha = .6f), unselectedTextColor = TextMuted, indicatorColor = com.example.ui.theme.ImmersiveSecondaryContainer),
+              modifier = Modifier.testTag("nav_item_${item.route}")
             )
-          }
-
-          // Bottom Navigation Bar
-          NavigationBar(
-            containerColor = SurfaceDark,
-            contentColor = SpotifyGreen,
-            tonalElevation = 8.dp,
-            windowInsets = WindowInsets(0, 0, 0, 0),
-            modifier = Modifier
-              .fillMaxWidth()
-              .border(width = 1.dp, color = GlassBorder)
-              .height(64.dp)
-              .testTag("main_bottom_nav_bar")
-          ) {
-            navItems.forEach { item ->
-              val isSelected = currentDestination.route == item.route
-              NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                  currentDestination = item
-                  if (item == NavDestination.Library) {
-                    viewModel.selectPlaylist(null)
-                  }
-                },
-                icon = {
-                  Icon(
-                    imageVector = item.icon,
-                    contentDescription = item.label,
-                    modifier = Modifier.size(24.dp)
-                  )
-                },
-                label = {
-                  Text(
-                    text = item.label,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                  )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                  selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer,
-                  selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer,
-                  unselectedIconColor = TextSecondary.copy(alpha = 0.6f),
-                  unselectedTextColor = TextMuted,
-                  indicatorColor = com.example.ui.theme.ImmersiveSecondaryContainer
-                ),
-                modifier = Modifier.testTag("nav_item_${item.route}")
-              )
-            }
           }
         }
       }
-    ) { innerPadding ->
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(innerPadding)
-      ) {
+    }
+  ) { innerPadding ->
+    Box(Modifier.fillMaxSize().padding(innerPadding)) {
       when (currentDestination) {
-        NavDestination.Home -> HomeScreen(
-          tracks = catalogTracks,
-          fusionBlends = fusionBlends,
-          recentTracks = recentHistory,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          visualizerBars = playerState.visualizerBars,
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onPlayBlend = { blend -> viewModel.playFusionBlend(blend) },
-          onNavigateToSearch = { currentDestination = NavDestination.Search },
-          onNavigateToLibrary = { currentDestination = NavDestination.Library },
-          onNavigateToBlends = { currentDestination = NavDestination.Blends },
-          onNavigateToEqualizer = { currentDestination = NavDestination.Equalizer },
-          onOpenSettings = { viewModel.setSettingsOpen(true) },
-          onOpenAddToPlaylist = { track -> viewModel.showAddToPlaylistDialog(track) }
-        )
-
-        NavDestination.Search -> SearchScreen(
-          searchQuery = searchQuery,
-          selectedGenre = selectedGenre,
-          searchResults = searchResults,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
-          onGenreSelected = { viewModel.onGenreSelected(it) },
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onToggleLike = { viewModel.toggleLike(it) },
-          isTrackLiked = { viewModel.isTrackLiked(it) },
-          onAddToPlaylist = { track -> viewModel.showAddToPlaylistDialog(track) }
-        )
-
-        NavDestination.Blends -> FusionBlendsScreen(
-          fusionBlends = fusionBlends,
-          onPlayBlend = { blend -> viewModel.playFusionBlend(blend) },
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onGenerateBlend = { a, b, name -> viewModel.generateCustomBlend(a, b, name) },
-          onSaveBlendAsPlaylist = { name, desc, tracks ->
-            viewModel.createPlaylist(name, desc)
-            tracks.forEach { track ->
-              catalogTracks.find { it.id == track.id }?.let {
-                // Persistent
-              }
-            }
-          }
-        )
-
-        NavDestination.Library -> LibraryScreen(
-          playlists = playlists,
-          likedTracks = likedTracks,
-          recentHistory = recentHistory,
-          localTracks = localTracks,
-          selectedPlaylist = selectedPlaylist,
-          selectedPlaylistTracks = selectedPlaylistTracks,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          onSelectPlaylist = { viewModel.selectPlaylist(it) },
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onPlayAll = { tracks ->
-            if (tracks.isNotEmpty()) viewModel.playQueue(tracks, startIndex = 0)
-          },
-          onShufflePlay = { tracks ->
-            if (tracks.isNotEmpty()) viewModel.shufflePlay(tracks)
-          },
-          onToggleLike = { viewModel.toggleLike(it) },
-          onCreatePlaylistDialog = {
-            viewModel.createPlaylist("My SpotiFusion Mix", "Created from Library")
-          },
-          onDeletePlaylist = { playlistId -> viewModel.deletePlaylist(playlistId) },
-          onScanLocalTracks = { viewModel.scanLocalMusic() },
-          onRemoveTrackFromPlaylist = { playlistId, trackId ->
-            viewModel.removeTrackFromPlaylist(playlistId, trackId)
-          }
-        )
-
-        NavDestination.Equalizer -> EqualizerScreen(
-          equalizerState = equalizerState,
-          onToggleEnabled = { viewModel.setEqualizerEnabled(it) },
-          onSelectPreset = { viewModel.setEqualizerPreset(it) },
-          onBandGainChanged = { band, gain -> viewModel.setEqualizerBandGain(band, gain) },
-          onBassBoostChanged = { viewModel.setBassBoost(it) },
-          onVirtualizerChanged = { viewModel.setVirtualizer(it) },
-          onBack = { currentDestination = NavDestination.Home }
-        )
+        NavDestination.Home -> HomeScreen(catalogTracks, fusionBlends, recentHistory, playerState.currentTrack, playerState.isPlaying, playerState.visualizerBars, { t, q -> viewModel.playTrack(t, q) }, { viewModel.playFusionBlend(it) }, { currentDestination = NavDestination.Search }, { currentDestination = NavDestination.Library }, { currentDestination = NavDestination.Blends }, { currentDestination = NavDestination.Equalizer }, { viewModel.setSettingsOpen(true) }, { viewModel.showAddToPlaylistDialog(it) })
+        NavDestination.Search -> SearchScreen(searchQuery, selectedGenre, searchResults, playerState.currentTrack, playerState.isPlaying, viewModel::onSearchQueryChanged, viewModel::onGenreSelected, { t, q -> viewModel.playTrack(t, q) }, viewModel::toggleLike, { viewModel.isTrackLiked(it) }, { viewModel.showAddToPlaylistDialog(it) })
+        NavDestination.Blends -> FusionBlendsScreen(fusionBlends, { viewModel.playFusionBlend(it) }, { t, q -> viewModel.playTrack(t, q) }, { a, b, n -> viewModel.generateCustomBlend(a, b, n) }, { n, d, _ -> viewModel.createPlaylist(n, d) })
+        NavDestination.Library -> LibraryScreen(playlists, likedTracks, recentHistory, localTracks, downloadedTracks, selectedPlaylist, selectedPlaylistTracks, playerState.currentTrack, playerState.isPlaying, viewModel::selectPlaylist, { t, q -> viewModel.playTrack(t, q) }, { t -> if (t.isNotEmpty()) viewModel.playQueue(t, 0) }, { t -> if (t.isNotEmpty()) viewModel.shufflePlay(t) }, viewModel::toggleLike, { viewModel.createPlaylist("My SpotiFusion Mix", "Created from Library") }, viewModel::deletePlaylist, viewModel::scanLocalMusic, viewModel::removeTrackFromPlaylist)
+        NavDestination.Equalizer -> EqualizerScreen(equalizerState, viewModel::setEqualizerEnabled, viewModel::setEqualizerPreset, viewModel::setEqualizerBandGain, viewModel::setBassBoost, viewModel::setVirtualizer) { currentDestination = NavDestination.Home }
       }
 
-      // Full-Screen Expandable Now Playing Sheet
-      if (isNowPlayingExpanded && playerState.currentTrack != null) {
-        NowPlayingSheet(
-          track = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          currentPositionSec = playerState.currentPositionSec,
-          durationSec = playerState.durationSec,
-          isLiked = isCurrentTrackLiked,
-          isShuffled = playerState.isShuffled,
-          repeatMode = playerState.repeatMode,
-          volume = playerState.volume,
-          visualizerBars = playerState.visualizerBars,
-          syncedLyrics = currentSyncedLyrics,
-          sleepTimerMinutes = sleepTimerMinutes,
-          onClose = { viewModel.setNowPlayingExpanded(false) },
-          onTogglePlayPause = { viewModel.togglePlayPause() },
-          onNext = { viewModel.nextTrack() },
-          onPrevious = { viewModel.previousTrack() },
-          onSeek = { viewModel.seekTo(it) },
-          onToggleShuffle = { viewModel.toggleShuffle() },
-          onCycleRepeat = { viewModel.cycleRepeatMode() },
-          onToggleLike = { viewModel.toggleLike(it) },
-          onSetVolume = { viewModel.setVolume(it) },
-          onOpenEqualizer = {
-            viewModel.setNowPlayingExpanded(false)
-            currentDestination = NavDestination.Equalizer
-          },
-          onOpenSleepTimer = {
-            viewModel.setSleepTimerOpen(true)
-          },
-          onAddToPlaylist = { track ->
-            viewModel.showAddToPlaylistDialog(track)
-          }
-        )
-      }
+      if (isNowPlayingExpanded && playerState.currentTrack != null) NowPlayingSheet(
+        track = playerState.currentTrack, isPlaying = playerState.isPlaying, currentPositionSec = playerState.currentPositionSec,
+        durationSec = playerState.durationSec, isLiked = isCurrentTrackLiked, isShuffled = playerState.isShuffled, repeatMode = playerState.repeatMode,
+        volume = playerState.volume, visualizerBars = playerState.visualizerBars, syncedLyrics = currentSyncedLyrics, sleepTimerMinutes = sleepTimerMinutes,
+        onClose = { viewModel.setNowPlayingExpanded(false) }, onTogglePlayPause = viewModel::togglePlayPause, onNext = viewModel::nextTrack,
+        onPrevious = viewModel::previousTrack, onSeek = viewModel::seekTo, onToggleShuffle = viewModel::toggleShuffle, onCycleRepeat = viewModel::cycleRepeatMode,
+        onToggleLike = viewModel::toggleLike, onSetVolume = viewModel::setVolume, onOpenEqualizer = { viewModel.setNowPlayingExpanded(false); currentDestination = NavDestination.Equalizer },
+        onOpenSleepTimer = { viewModel.setSleepTimerOpen(true) }, onAddToPlaylist = viewModel::showAddToPlaylistDialog,
+        onDownload = viewModel::downloadTrack, onRemoveDownload = viewModel::removeDownloadedTrack,
+        isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id), lyricsAutoScroll = settingsState.lyricsAutoScroll, visualizerHighFps = settingsState.visualizer60fps
+      )
 
-      // Add To Playlist Dialog
-      if (trackForPlaylistDialog != null) {
-        AddToPlaylistDialog(
-          track = trackForPlaylistDialog,
-          playlists = playlists,
-          onDismiss = { viewModel.showAddToPlaylistDialog(null) },
-          onAddToPlaylist = { playlistId, track ->
-            viewModel.addTrackToPlaylist(playlistId, track)
-            viewModel.showAddToPlaylistDialog(null)
-          },
-          onCreatePlaylist = { name, desc, track ->
-            viewModel.createPlaylist(name, desc)
-            viewModel.showAddToPlaylistDialog(null)
-          }
-        )
-      }
+      if (trackForPlaylistDialog != null) AddToPlaylistDialog(trackForPlaylistDialog, playlists, { viewModel.showAddToPlaylistDialog(null) }, { id, track -> viewModel.addTrackToPlaylist(id, track); viewModel.showAddToPlaylistDialog(null) }, { name, desc, _ -> viewModel.createPlaylist(name, desc); viewModel.showAddToPlaylistDialog(null) })
 
-      // Settings Sheet Modal
-      if (isSettingsOpen) {
-        SettingsSheet(
-          settings = settingsState,
-          onUpdateAudioQuality = { viewModel.updateAudioQuality(it) },
-          onUpdateCrossfade = { viewModel.updateCrossfade(it) },
-          onToggleShakeToSkip = { viewModel.toggleShakeToSkip(it) },
-          onToggleLyricsAutoScroll = { viewModel.toggleLyricsAutoScroll(it) },
-          onToggleVisualizer60fps = { viewModel.toggleVisualizer60fps(it) },
-          onClearCache = { viewModel.clearCache() },
-          onDismiss = { viewModel.setSettingsOpen(false) }
-        )
-      }
+      if (isSettingsOpen) SettingsSheet(
+        settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
+        onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44) },
+        onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
+      )
 
-      // Sleep Timer Dialog
-      if (isSleepTimerOpen) {
-        SleepTimerDialog(
-          activeMinutes = sleepTimerMinutes,
-          remainingSec = sleepTimerRemainingSec,
-          onSetTimer = { viewModel.setSleepTimer(it) },
-          onDismiss = { viewModel.setSleepTimerOpen(false) }
-        )
-      }
+      if (isSleepTimerOpen) SleepTimerDialog(sleepTimerMinutes, sleepTimerRemainingSec, viewModel::setSleepTimer) { viewModel.setSleepTimerOpen(false) }
     }
   }
 }
