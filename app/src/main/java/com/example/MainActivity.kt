@@ -61,7 +61,6 @@ import com.example.ui.theme.SpotiFusionTheme
 import com.example.ui.theme.SpotifyGreen
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.MusicViewModel
 
 sealed class NavDestination(val route: String, val label: String, val icon: ImageVector) {
@@ -146,7 +145,11 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
             NavigationBarItem(
               selected = selected,
               onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
-              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else Color.Transparent)) },
+              icon = {
+                Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else Color.Transparent)) {
+                  Icon(imageVector = item.icon, contentDescription = item.label, modifier = Modifier.fillMaxSize().padding(9.dp))
+                }
+              },
               label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
               colors = NavigationBarItemDefaults.colors(selectedIconColor = SpotifyGreen, selectedTextColor = SpotifyGreen, unselectedIconColor = TextMuted, unselectedTextColor = TextMuted),
               modifier = Modifier.testTag("nav_item_${item.route}")
