@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -51,7 +50,6 @@ import com.example.ui.components.NowPlayingSheet
 import com.example.ui.components.SettingsSheet
 import com.example.ui.components.SleepTimerDialog
 import com.example.ui.screens.EqualizerScreen
-import com.example.ui.screens.FusionBlendsScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.SearchScreen
@@ -67,7 +65,6 @@ import com.example.ui.viewmodel.MusicViewModel
 sealed class NavDestination(val route: String, val label: String, val icon: ImageVector) {
   object Home : NavDestination("home", "Home", Icons.Default.Home)
   object Search : NavDestination("search", "Search", Icons.Default.Search)
-  object Blends : NavDestination("blends", "Fusion", Icons.Default.AutoAwesome)
   object Library : NavDestination("library", "Library", Icons.Default.LibraryMusic)
   object Equalizer : NavDestination("equalizer", "Equalizer", Icons.Default.GraphicEq)
 }
@@ -106,7 +103,6 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val catalogTracks by viewModel.catalogTracks.collectAsStateWithLifecycle()
   val downloadedIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
   val downloadedTracks = remember(catalogTracks, localTracks, downloadedIds) { (catalogTracks + localTracks).distinctBy { it.id }.filter { it.id in downloadedIds } }
-  val fusionBlends by viewModel.fusionBlends.collectAsStateWithLifecycle()
   val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
   val settingsState by viewModel.settingsState.collectAsStateWithLifecycle()
   val currentSyncedLyrics by viewModel.currentSyncedLyrics.collectAsStateWithLifecycle()
@@ -122,7 +118,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val selectedPlaylistTracks by viewModel.selectedPlaylistTracks.collectAsStateWithLifecycle()
   val trackForPlaylistDialog by viewModel.trackForPlaylistDialog.collectAsStateWithLifecycle()
   val isCurrentTrackLiked = playerState.currentTrack?.let { viewModel.isTrackLiked(it.id) } ?: false
-  val navItems = listOf(NavDestination.Home, NavDestination.Search, NavDestination.Blends, NavDestination.Library, NavDestination.Equalizer)
+  val navItems = listOf(NavDestination.Home, NavDestination.Search, NavDestination.Library, NavDestination.Equalizer)
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
@@ -158,9 +154,17 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   ) { innerPadding ->
     Box(Modifier.fillMaxSize().padding(innerPadding)) {
       when (currentDestination) {
-        NavDestination.Home -> HomeScreen(catalogTracks, fusionBlends, recentHistory, playerState.currentTrack, playerState.isPlaying, playerState.visualizerBars, { t, q -> viewModel.playTrack(t, q) }, { viewModel.playFusionBlend(it) }, { currentDestination = NavDestination.Search }, { currentDestination = NavDestination.Library }, { currentDestination = NavDestination.Blends }, { currentDestination = NavDestination.Equalizer }, { viewModel.setSettingsOpen(true) }, { viewModel.showAddToPlaylistDialog(it) })
+        NavDestination.Home -> HomeScreen(
+          tracks = catalogTracks,
+          recentTracks = recentHistory,
+          currentPlayingTrack = playerState.currentTrack,
+          isPlaying = playerState.isPlaying,
+          onTrackClick = { t, q -> viewModel.playTrack(t, q) },
+          onNavigateToSearch = { currentDestination = NavDestination.Search },
+          onNavigateToLibrary = { currentDestination = NavDestination.Library },
+          onOpenSettings = { viewModel.setSettingsOpen(true) }
+        )
         NavDestination.Search -> SearchScreen(searchQuery, selectedGenre, searchResults, playerState.currentTrack, playerState.isPlaying, viewModel::onSearchQueryChanged, viewModel::onGenreSelected, { t, q -> viewModel.playTrack(t, q) }, viewModel::toggleLike, { viewModel.isTrackLiked(it) }, { viewModel.showAddToPlaylistDialog(it) })
-        NavDestination.Blends -> FusionBlendsScreen(fusionBlends, { viewModel.playFusionBlend(it) }, { t, q -> viewModel.playTrack(t, q) }, { a, b, n -> viewModel.generateCustomBlend(a, b, n) }, { n, d, _ -> viewModel.createPlaylist(n, d) })
         NavDestination.Library -> LibraryScreen(playlists, likedTracks, recentHistory, localTracks, downloadedTracks, selectedPlaylist, selectedPlaylistTracks, playerState.currentTrack, playerState.isPlaying, viewModel::selectPlaylist, { t, q -> viewModel.playTrack(t, q) }, { t -> if (t.isNotEmpty()) viewModel.playQueue(t, 0) }, { t -> if (t.isNotEmpty()) viewModel.shufflePlay(t) }, viewModel::toggleLike, { viewModel.createPlaylist("My SpotiFusion Mix", "Created from Library") }, viewModel::deletePlaylist, viewModel::scanLocalMusic, viewModel::removeTrackFromPlaylist)
         NavDestination.Equalizer -> EqualizerScreen(equalizerState, viewModel::setEqualizerEnabled, viewModel::setEqualizerPreset, viewModel::setEqualizerBandGain, viewModel::setBassBoost, viewModel::setVirtualizer) { currentDestination = NavDestination.Home }
       }
