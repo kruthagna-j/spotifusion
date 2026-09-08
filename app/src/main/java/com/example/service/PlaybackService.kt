@@ -79,36 +79,46 @@ class PlaybackService : MediaSessionService() {
 
   private fun setupAudioEffects(sessionId: Int) {
     if (sessionId == C.AUDIO_SESSION_ID_UNSET || sessionId == 0) return
-    try {
-      if (hwEqualizer == null || hwEqualizer?.hasControl() != true) {
-        hwEqualizer = Equalizer(0, sessionId)
-      }
-      if (hwBassBoost == null) {
-        hwBassBoost = BassBoost(0, sessionId)
-      }
-      if (hwVirtualizer == null) {
-        hwVirtualizer = Virtualizer(0, sessionId)
-      }
-      if (hwLoudness == null) {
-        hwLoudness = LoudnessEnhancer(sessionId)
-      }
-      updateAudioEffects(pendingEqualizerState)
-    } catch (e: Exception) {
-      Log.w(TAG, "Hardware audio effects initialization notice: ${e.message}")
+
+    // Audio effects are optional platform features. Initialize them independently so
+    // one unsupported effect cannot prevent the remaining effects from working.
+    if (hwEqualizer == null) {
+      runCatching { Equalizer(0, sessionId) }
+        .onSuccess { hwEqualizer = it }
+        .onFailure { Log.w(TAG, "Equalizer unavailable: ${it.message}") }
     }
+    if (hwBassBoost == null) {
+      runCatching { BassBoost(0, sessionId) }
+        .onSuccess { hwBassBoost = it }
+        .onFailure { Log.w(TAG, "BassBoost unavailable: ${it.message}") }
+    }
+    if (hwVirtualizer == null) {
+      runCatching { Virtualizer(0, sessionId) }
+        .onSuccess { hwVirtualizer = it }
+        .onFailure { Log.w(TAG, "Virtualizer unavailable: ${it.message}") }
+    }
+    if (hwLoudness == null) {
+      runCatching { LoudnessEnhancer(sessionId) }
+        .onSuccess { hwLoudness = it }
+        .onFailure { Log.w(TAG, "LoudnessEnhancer unavailable: ${it.message}") }
+    }
+
+    updateAudioEffects(pendingEqualizerState)
   }
 
   fun updateAudioEffects(state: EqualizerState) {
-    try {
-      hwEqualizer?.enabled = state.isEnabled
-      hwBassBoost?.enabled = state.isEnabled
-      hwVirtualizer?.enabled = state.isEnabled
-      hwLoudness?.enabled = state.isEnabled
+    if (!state.isEnabled) {
+      runCatching { hwEqualizer?.enabled = false }
+      runCatching { hwBassBoost?.enabled = false }
+      runCatching { hwVirtualizer?.enabled = false }
+      runCatching { hwLoudness?.enabled = false }
+      return
+    }
 
-      if (!state.isEnabled) return
-
-      val equalizer = hwEqualizer
-      if (equalizer != null) {
+    val equalizer = hwEqualizer
+    if (equalizer != null) {
+      runCatching {
+        equalizer.enabled = true
         val numberOfBands = equalizer.numberOfBands.toInt()
         val lower = equalizer.bandLevelRange[0].toInt()
         val upper = equalizer.bandLevelRange[1].toInt()
@@ -125,19 +135,29 @@ class PlaybackService : MediaSessionService() {
             }
           }
 
-          val requestedMilliBel = (state.bandGains.getOrElse(nearest) { 0f } * 100f).toInt()
+          // Equalizer.setBandLevel uses millibels: 1 dB = 100 mB.
+          val requestedMilliBel = (state.bandGains.getOrElse(nearest) { 0f } * 1000f).toInt()
           val clampedMilliBel = requestedMilliBel.coerceIn(lower, upper).toShort()
           equalizer.setBandLevel(band.toShort(), clampedMilliBel)
         }
-      }
+      }.onFailure { Log.w(TAG, "Could not apply hardware EQ bands: ${it.message}") }
+    }
 
+    runCatching {
+      hwBassBoost?.enabled = true
       hwBassBoost?.setStrength((state.bassBoost.coerceIn(0f, 1f) * 1000f).toInt().toShort())
+    }.onFailure { Log.w(TAG, "Could not apply BassBoost: ${it.message}") }
+
+    runCatching {
+      hwVirtualizer?.enabled = true
       hwVirtualizer?.setStrength((state.virtualizer.coerceIn(0f, 1f) * 1000f).toInt().toShort())
+    }.onFailure { Log.w(TAG, "Could not apply Virtualizer: ${it.message}") }
+
+    runCatching {
+      hwLoudness?.enabled = true
       // LoudnessEnhancer expects target gain in millibels. Map 0..1 to 0..12 dB.
       hwLoudness?.setTargetGain((state.loudness.coerceIn(0f, 1f) * 1200f).toInt())
-    } catch (e: Exception) {
-      Log.w(TAG, "Could not apply hardware EQ: ${e.message}")
-    }
+    }.onFailure { Log.w(TAG, "Could not apply LoudnessEnhancer: ${it.message}") }
   }
 
   override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -149,12 +169,10 @@ class PlaybackService : MediaSessionService() {
 
   override fun onDestroy() {
     if (instance === this) instance = null
-    try {
-      hwEqualizer?.release()
-      hwBassBoost?.release()
-      hwVirtualizer?.release()
-      hwLoudness?.release()
-    } catch (_: Exception) {}
+    runCatching { hwEqualizer?.release() }
+    runCatching { hwBassBoost?.release() }
+    runCatching { hwVirtualizer?.release() }
+    runCatching { hwLoudness?.release() }
     hwEqualizer = null
     hwBassBoost = null
     hwVirtualizer = null
