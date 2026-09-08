@@ -11,6 +11,15 @@ on:
       - "gradle.properties"
       - "gradle/libs.versions.toml"
       - ".github/workflows/android-root-apk.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/libs.versions.toml"
+      - ".github/workflows/android-root-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -38,27 +47,13 @@ jobs:
           gradle-version: "9.3.1"
       - name: Create debug keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
       - name: Create temporary release signing key
         run: |
-          keytool -genkeypair -v \
-            -keystore "$RUNNER_TEMP/spotifusion-release.jks" \
-            -storepass spotifusion-ci \
-            -alias upload \
-            -keypass spotifusion-ci \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Spotifusion CI, OU=Android, O=Spotifusion, L=Kurnool, ST=Andhra Pradesh, C=IN"
-          {
-            echo "KEYSTORE_PATH=$RUNNER_TEMP/spotifusion-release.jks"
-            echo "STORE_PASSWORD=spotifusion-ci"
-            echo "KEY_PASSWORD=spotifusion-ci"
-          } >> "$GITHUB_ENV"
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/spotifusion-release.jks" -storepass spotifusion-ci -alias upload -keypass spotifusion-ci -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Spotifusion CI, OU=Android, O=Spotifusion, L=Kurnool, ST=Andhra Pradesh, C=IN"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/spotifusion-release.jks" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=spotifusion-ci" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=spotifusion-ci" >> "$GITHUB_ENV"
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Build release APK
