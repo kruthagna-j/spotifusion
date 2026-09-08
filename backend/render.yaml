@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: spotifusion-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: ALLOWED_ORIGINS
+        value: https://spotifusion.vercel.app
