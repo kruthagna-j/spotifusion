@@ -132,7 +132,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
   fun toggleLike(track: Track) { viewModelScope.launch { repository.toggleLike(track) } }
   fun isTrackLiked(trackId: String): Boolean = likedTracks.value.any { it.id == trackId }
   fun createPlaylist(title: String, description: String = "") { viewModelScope.launch { val newId = repository.createCustomPlaylist(title, description); playlists.value.find { it.id == newId }?.let { _selectedPlaylist.value = it } } }
-  fun addTrackToPlaylist(playlistId: String, track: Track) { viewModelScope.launch { repository.addTrackToPlaylist(playlistId, track) } }
+  fun createPlaylistAndAddTrack(title: String, description: String = "", track: Track) {
+    viewModelScope.launch {
+      val playlistId = repository.createCustomPlaylist(title, description)
+      repository.addTrackToPlaylist(playlistId, track)
+      playlists.value.find { it.id == playlistId }?.let { _selectedPlaylist.value = it }
+    }
+  }
+  fun addTrackToPlaylist(playlistId: String, track: Track) { if (playlistId.isBlank()) return; viewModelScope.launch { repository.addTrackToPlaylist(playlistId, track) } }
   fun removeTrackFromPlaylist(playlistId: String, trackId: String) { viewModelScope.launch { repository.removeTrackFromPlaylist(playlistId, trackId) } }
   fun deletePlaylist(playlistId: String) { viewModelScope.launch { repository.deletePlaylist(playlistId); if (_selectedPlaylist.value?.id == playlistId) _selectedPlaylist.value = null } }
   fun playFusionBlend(blend: FusionBlend) { if (blend.tracks.isNotEmpty()) playQueue(blend.tracks, 0) }
