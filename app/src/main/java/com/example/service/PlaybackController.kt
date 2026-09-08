@@ -11,8 +11,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.example.data.remote.StreamResolver
 import com.example.data.OfflineDownloadManager
+import com.example.data.remote.StreamResolver
 import com.example.model.EqualizerState
 import com.example.model.PlayerState
 import com.example.model.RepeatMode
@@ -66,7 +66,15 @@ object PlaybackController {
           val dur = ((controller?.duration ?: 0L) / 1000).toInt().coerceAtLeast(0)
           _playerState.value = _playerState.value.copy(isBuffering = false, durationSec = if (dur > 0) dur else (_playerState.value.currentTrack?.durationSec ?: 0))
         }
-        Player.STATE_ENDED -> { _playerState.value = _playerState.value.copy(isBuffering = false); nextTrack() }
+        Player.STATE_ENDED -> {
+          _playerState.value = _playerState.value.copy(isBuffering = false)
+          if (_playerState.value.repeatMode == RepeatMode.ONE) {
+            controller?.seekTo(0L)
+            controller?.playWhenReady = true
+          } else {
+            nextTrack()
+          }
+        }
         Player.STATE_IDLE -> _playerState.value = _playerState.value.copy(isBuffering = false)
       }
     }
@@ -137,7 +145,7 @@ object PlaybackController {
         val resolvedUrl = StreamResolver.resolveStreamUrl(track.id, audioQuality)
         if (resolvedUrl != null) withContext(Dispatchers.Main) { playMediaUri(Uri.parse(resolvedUrl), track) }
         else if (track.audioUrl.isNotBlank()) withContext(Dispatchers.Main) { playMediaUri(Uri.parse(track.audioUrl), track) }
-        else _playerState.value = _playerState.value.copy(isBuffering = false)
+        else _playerState.value = _playerState.value.copy(isBuffering = false, isPlaying = false)
       }
     }
     startProgressLoop()
@@ -154,12 +162,12 @@ object PlaybackController {
   fun togglePlayPause() { val state = _playerState.value; if (state.currentTrack == null) { if (state.queue.isNotEmpty()) playTrack(state.queue[state.queueIndex.coerceIn(0, state.queue.lastIndex)]); return }; if (state.isPlaying) pause() else resume() }
   fun pause() { _playerState.value = _playerState.value.copy(isPlaying = false); controller?.playWhenReady = false; progressTimerJob?.cancel() }
   fun resume() { val track = _playerState.value.currentTrack ?: return; _playerState.value = _playerState.value.copy(isPlaying = true); controller?.let { if (it.playbackState == Player.STATE_IDLE || it.mediaItemCount == 0) playTrack(track) else it.playWhenReady = true }; startProgressLoop() }
-  fun seekTo(positionSec: Int) { val track = _playerState.value.currentTrack ?: return; val clamped = positionSec.coerceIn(0, track.durationSec.coerceAtLeast(300)); _playerState.value = _playerState.value.copy(currentPositionSec = clamped); controller?.seekTo((clamped * 1000).toLong()) }
+  fun seekTo(positionSec: Int) { val track = _playerState.value.currentTrack ?: return; val maxPosition = track.durationSec.coerceAtLeast(0); val clamped = positionSec.coerceIn(0, maxPosition); _playerState.value = _playerState.value.copy(currentPositionSec = clamped); controller?.seekTo((clamped * 1000).toLong()) }
 
   fun nextTrack() {
     val state = _playerState.value; if (state.queue.isEmpty()) return
     val nextIndex = if (state.queueIndex + 1 < state.queue.size) state.queueIndex + 1 else if (state.repeatMode != RepeatMode.OFF) 0 else state.queueIndex
-    if (nextIndex < state.queue.size) { _playerState.value = _playerState.value.copy(queueIndex = nextIndex); playTrack(state.queue[nextIndex]) } else pause()
+    if (nextIndex < state.queue.size && (nextIndex != state.queueIndex || state.repeatMode != RepeatMode.OFF)) { _playerState.value = _playerState.value.copy(queueIndex = nextIndex); playTrack(state.queue[nextIndex]) } else pause()
   }
   fun previousTrack() { val state = _playerState.value; if (state.queue.isEmpty()) return; if (state.currentPositionSec > 3) { seekTo(0); return }; val prevIndex = if (state.queueIndex - 1 >= 0) state.queueIndex - 1 else state.queue.lastIndex; _playerState.value = _playerState.value.copy(queueIndex = prevIndex); playTrack(state.queue[prevIndex]) }
 
