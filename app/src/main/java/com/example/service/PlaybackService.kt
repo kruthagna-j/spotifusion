@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -24,6 +25,7 @@ class PlaybackService : MediaSessionService() {
   private var hwEqualizer: Equalizer? = null
   private var hwBassBoost: BassBoost? = null
   private var hwVirtualizer: Virtualizer? = null
+  private var hwLoudness: LoudnessEnhancer? = null
 
   companion object {
     private const val TAG = "PlaybackService"
@@ -87,6 +89,9 @@ class PlaybackService : MediaSessionService() {
       if (hwVirtualizer == null) {
         hwVirtualizer = Virtualizer(0, sessionId)
       }
+      if (hwLoudness == null) {
+        hwLoudness = LoudnessEnhancer(sessionId)
+      }
       updateAudioEffects(pendingEqualizerState)
     } catch (e: Exception) {
       Log.w(TAG, "Hardware audio effects initialization notice: ${e.message}")
@@ -98,6 +103,7 @@ class PlaybackService : MediaSessionService() {
       hwEqualizer?.enabled = state.isEnabled
       hwBassBoost?.enabled = state.isEnabled
       hwVirtualizer?.enabled = state.isEnabled
+      hwLoudness?.enabled = state.isEnabled
 
       if (!state.isEnabled) return
 
@@ -107,9 +113,6 @@ class PlaybackService : MediaSessionService() {
         val lower = equalizer.bandLevelRange[0].toInt()
         val upper = equalizer.bandLevelRange[1].toInt()
 
-        // Devices expose different numbers of EQ bands. Map each hardware band
-        // to the nearest one of Spotifusion's five UI bands instead of assuming
-        // the device has exactly five bands.
         for (band in 0 until numberOfBands) {
           val centerHz = equalizer.getCenterFreq(band.toShort()) / 1000f
           var nearest = 0
@@ -130,6 +133,8 @@ class PlaybackService : MediaSessionService() {
 
       hwBassBoost?.setStrength((state.bassBoost.coerceIn(0f, 1f) * 1000f).toInt().toShort())
       hwVirtualizer?.setStrength((state.virtualizer.coerceIn(0f, 1f) * 1000f).toInt().toShort())
+      // LoudnessEnhancer expects target gain in millibels. Map 0..1 to 0..12 dB.
+      hwLoudness?.setTargetGain((state.loudness.coerceIn(0f, 1f) * 1200f).toInt())
     } catch (e: Exception) {
       Log.w(TAG, "Could not apply hardware EQ: ${e.message}")
     }
@@ -148,10 +153,12 @@ class PlaybackService : MediaSessionService() {
       hwEqualizer?.release()
       hwBassBoost?.release()
       hwVirtualizer?.release()
+      hwLoudness?.release()
     } catch (_: Exception) {}
     hwEqualizer = null
     hwBassBoost = null
     hwVirtualizer = null
+    hwLoudness = null
 
     mediaSession?.run {
       player.release()
