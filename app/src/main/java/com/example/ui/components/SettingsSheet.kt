@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.SettingsState
-import com.example.ui.theme.BgDark
 import com.example.ui.theme.GlassBorder
 import com.example.ui.theme.SpotifyGreen
 import com.example.ui.theme.SurfaceCard
@@ -80,7 +79,7 @@ fun SettingsSheet(settings: SettingsState, onUpdateAudioQuality: (String) -> Uni
       SettingsSectionTitle("AUDIO & STREAMING")
       val qualities = listOf("Normal (160kbps)", "High (320kbps)", "Maximum")
       Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(12.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        qualities.forEach { quality -> val selected = settings.audioQuality == quality; Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (selected) SpotifyGreen else Color.Transparent).clickable { onUpdateAudioQuality(quality) }.padding(vertical = 8.dp), Alignment.Center) { Text(quality.substringBefore(" "), fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) BgDark else TextSecondary, fontSize = 11.sp) } }
+        qualities.forEach { quality -> val selected = settings.audioQuality == quality; Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (selected) SpotifyGreen else Color.Transparent).clickable { onUpdateAudioQuality(quality) }.padding(vertical = 8.dp), Alignment.Center) { Text(quality.substringBefore(" "), fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) MaterialTheme.colorScheme.onPrimary else TextSecondary, fontSize = 11.sp) } }
       }
       Spacer(Modifier.height(16.dp))
       SettingsSectionTitle("PLAYBACK")
@@ -117,6 +116,6 @@ fun SettingsSheet(settings: SettingsState, onUpdateAudioQuality: (String) -> Uni
 @Composable private fun SettingsToggleRow(icon: ImageVector, title: String, subtitle: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
   Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(14.dp)).padding(14.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(36.dp).clip(CircleShape).background(SurfaceElevated), Alignment.Center) { Icon(icon, null, tint = SpotifyGreen, modifier = Modifier.size(20.dp)) }; Spacer(Modifier.width(12.dp)); Column { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(subtitle, color = TextMuted, fontSize = 11.sp) } }
-    Switch(checked = isChecked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = BgDark, checkedTrackColor = SpotifyGreen, uncheckedThumbColor = TextMuted, uncheckedTrackColor = SurfaceElevated))
+    Switch(checked = isChecked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = SpotifyGreen, uncheckedThumbColor = TextMuted, uncheckedTrackColor = SurfaceElevated))
   }
 }
