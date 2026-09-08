@@ -228,7 +228,10 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
         playlists, 
         { viewModel.showAddToPlaylistDialog(null) }, 
         { id, track -> viewModel.addTrackToPlaylist(id, track) },
-        onCreatePlaylist = viewModel::createPlaylist
+        onCreatePlaylist = { name, description, track -> 
+          viewModel.createPlaylist(name, description)
+          viewModel.addTrackToPlaylist(playlists.find { it.title == name }?.id ?: "", track)
+        }
       )
 
       if (isSettingsOpen) SettingsSheet(
