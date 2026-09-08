@@ -145,7 +145,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
             NavigationBarItem(
               selected = selected,
               onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
-              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent)) },
+              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(item.icon, contentDescription = item.label, tint = if (selected) SpotifyGreen else TextSecondary, modifier = Modifier.size(24.dp)) } },
               label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
               colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer),
               modifier = Modifier.testTag("nav_item_${item.route}")
@@ -167,9 +167,47 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
           onNavigateToLibrary = { currentDestination = NavDestination.Library },
           onOpenSettings = { viewModel.setSettingsOpen(true) }
         )
-        NavDestination.Search -> SearchScreen(searchQuery, selectedGenre, searchResults, playerState.currentTrack, playerState.isPlaying, viewModel::onSearchQueryChanged, viewModel::onGenreSelected)
-        NavDestination.Library -> LibraryScreen(playlists, likedTracks, recentHistory, localTracks, downloadedTracks, selectedPlaylist, selectedPlaylistTracks, playerState.currentTrack, playerState.isPlaying, { t, q -> viewModel.playTrack(t, q) }, { viewModel.selectPlaylist(it) }, { t, p -> viewModel.removeTrackFromPlaylist(p, t) }, { viewModel.removePlaylist(it) })
-        NavDestination.Equalizer -> EqualizerScreen(equalizerState, viewModel::setEqualizerEnabled, viewModel::setEqualizerPreset, viewModel::setEqualizerBandGain, viewModel::setBassBoost, viewModel::setVirtualizer) { currentDestination = NavDestination.Home }
+        NavDestination.Search -> SearchScreen(
+          searchQuery = searchQuery,
+          selectedGenre = selectedGenre,
+          searchResults = searchResults,
+          currentPlayingTrack = playerState.currentTrack,
+          isPlaying = playerState.isPlaying,
+          onSearchQueryChanged = viewModel::onSearchQueryChanged,
+          onGenreSelected = viewModel::onGenreSelect,
+          onTrackClick = { t, q -> viewModel.playTrack(t, q) },
+          onToggleLike = viewModel::toggleLike,
+          isTrackLiked = { trackId -> viewModel.isTrackLiked(trackId) },
+          onAddToPlaylist = viewModel::showAddToPlaylistDialog
+        )
+        NavDestination.Library -> LibraryScreen(
+          playlists = playlists,
+          likedTracks = likedTracks,
+          recentHistory = recentHistory,
+          localTracks = localTracks,
+          downloadedTracks = downloadedTracks,
+          selectedPlaylist = selectedPlaylist,
+          selectedPlaylistTracks = selectedPlaylistTracks,
+          currentPlayingTrack = playerState.currentTrack,
+          isPlaying = playerState.isPlaying,
+          onSelectPlaylist = viewModel::selectPlaylist,
+          onTrackClick = { t, q -> viewModel.playTrack(t, q) },
+          onPlayAll = { tracks -> viewModel.playTrack(tracks.first(), tracks) },
+          onShufflePlay = { tracks -> viewModel.playTrack(tracks.random(), tracks) },
+          onToggleLike = viewModel::toggleLike,
+          onCreatePlaylistDialog = viewModel::showCreatePlaylistDialog,
+          onDeletePlaylist = viewModel::deletePlaylist,
+          onScanLocalTracks = viewModel::scanLocalTracks,
+          onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist
+        )
+        NavDestination.Equalizer -> EqualizerScreen(
+          equalizerState = equalizerState,
+          onSetEqualizerEnabled = viewModel::setEqualizerEnabled,
+          onSetEqualizerPreset = viewModel::setEqualizerPreset,
+          onSetEqualizerBandGain = viewModel::setEqualizerBandGain,
+          onSetBassBoost = viewModel::setBassBoost,
+          onSetVirtualizer = viewModel::setVirtualizer
+        )
       }
 
       if (isNowPlayingExpanded && playerState.currentTrack != null) NowPlayingSheet(
@@ -184,12 +222,12 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
         isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id), lyricsAutoScroll = settingsState.lyricsAutoScroll, visualizerHighFps = settingsState.visualizer60fps
       )
 
-      if (trackForPlaylistDialog != null) AddToPlaylistDialog(trackForPlaylistDialog, playlists, { viewModel.showAddToPlaylistDialog(null) }, { id, track -> viewModel.addTrackToPlaylist(id, track); viewModel.showAddToPlaylistDialog(null) }, { name, desc, _ -> viewModel.createPlaylist(name, desc); viewModel.showAddToPlaylistDialog(null) })
+      if (trackForPlaylistDialog != null) AddToPlaylistDialog(trackForPlaylistDialog, playlists, { viewModel.showAddToPlaylistDialog(null) }, { id, track -> viewModel.addTrackToPlaylist(id, track) })
 
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= 33) activity?.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44) },
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) activity?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101) },
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
