@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -30,14 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.model.FusionBlend
 import com.example.model.Track
 import com.example.ui.theme.BgDark
 import com.example.ui.theme.SpotifyGreen
@@ -48,19 +46,13 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun HomeScreen(
   tracks: List<Track>,
-  fusionBlends: List<FusionBlend>,
   recentTracks: List<Track>,
   currentPlayingTrack: Track?,
   isPlaying: Boolean,
-  visualizerBars: List<Float> = emptyList(),
   onTrackClick: (Track, List<Track>) -> Unit,
-  onPlayBlend: (FusionBlend) -> Unit,
   onNavigateToSearch: () -> Unit,
   onNavigateToLibrary: () -> Unit,
-  onNavigateToBlends: () -> Unit,
-  onNavigateToEqualizer: () -> Unit,
-  onOpenSettings: () -> Unit = {},
-  onOpenAddToPlaylist: (Track) -> Unit
+  onOpenSettings: () -> Unit = {}
 ) {
   LazyColumn(
     modifier = Modifier.fillMaxSize().background(BgDark),
@@ -86,33 +78,18 @@ fun HomeScreen(
     }
 
     item {
-      Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(20.dp)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(18.dp))
+          .background(MaterialTheme.colorScheme.surfaceVariant)
+          .clickable(onClick = onNavigateToSearch)
+          .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Text("Find your next song", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
-        Spacer(Modifier.height(6.dp))
-        Text("Search, listen, and let the music breathe.", color = TextSecondary, fontSize = 13.sp)
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          Row(
-            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(SpotifyGreen).clickable { onNavigateToSearch }.padding(horizontal = 16.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(Icons.Default.Search, null, tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(7.dp))
-            Text("Search Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-          }
-          if (tracks.isNotEmpty()) {
-            Row(
-              modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface).clickable { onTrackClick(tracks.first(), tracks) }.padding(horizontal = 16.dp, vertical = 11.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Default.PlayArrow, null, tint = SpotifyGreen, modifier = Modifier.size(18.dp))
-              Spacer(Modifier.width(7.dp))
-              Text("Play", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
-          }
-        }
+        Icon(Icons.Default.Search, "Search music", tint = TextSecondary)
+        Spacer(Modifier.width(10.dp))
+        Text("Search music", color = TextSecondary, fontSize = 14.sp)
       }
     }
 
