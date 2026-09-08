@@ -216,15 +216,34 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       }
 
       if (isNowPlayingExpanded && playerState.currentTrack != null) NowPlayingSheet(
-        track = playerState.currentTrack, isPlaying = playerState.isPlaying, currentPositionSec = playerState.currentPositionSec,
-        durationSec = playerState.durationSec, isLiked = isCurrentTrackLiked, isShuffled = playerState.isShuffled, repeatMode = playerState.repeatMode,
-        volume = playerState.volume, visualizerBars = playerState.visualizerBars, syncedLyrics = currentSyncedLyrics, sleepTimerMinutes = sleepTimerMinutes,
-        onClose = { viewModel.setNowPlayingExpanded(false) }, onTogglePlayPause = viewModel::togglePlayPause, onNext = viewModel::nextTrack,
-        onPrevious = viewModel::previousTrack, onSeek = viewModel::seekTo, onToggleShuffle = viewModel::toggleShuffle, onCycleRepeat = viewModel::cycleRepeatMode,
-        onToggleLike = viewModel::toggleLike, onSetVolume = viewModel::setVolume, onOpenEqualizer = { viewModel.setNowPlayingExpanded(false); currentDestination = NavDestination.Equalizer },
-        onOpenSleepTimer = { viewModel.setSleepTimerOpen(true) }, onAddToPlaylist = viewModel::showAddToPlaylistDialog,
-        onDownload = viewModel::downloadTrack, onRemoveDownload = viewModel::removeDownloadedTrack,
-        isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id), lyricsAutoScroll = settingsState.lyricsAutoScroll, visualizerHighFps = settingsState.visualizer60fps
+        track = playerState.currentTrack,
+        isPlaying = playerState.isPlaying,
+        currentPositionSec = playerState.currentPositionSec,
+        durationSec = playerState.durationSec,
+        isLiked = isCurrentTrackLiked,
+        isShuffled = playerState.isShuffled,
+        repeatMode = playerState.repeatMode,
+        volume = playerState.volume,
+        visualizerBars = playerState.visualizerBars,
+        syncedLyrics = currentSyncedLyrics,
+        sleepTimerMinutes = sleepTimerMinutes,
+        onClose = { viewModel.setNowPlayingExpanded(false) },
+        onTogglePlayPause = viewModel::togglePlayPause,
+        onNext = viewModel::nextTrack,
+        onPrevious = viewModel::previousTrack,
+        onSeek = viewModel::seekTo,
+        onToggleShuffle = viewModel::toggleShuffle,
+        onCycleRepeat = viewModel::cycleRepeatMode,
+        onToggleLike = viewModel::toggleLike,
+        onSetVolume = viewModel::setVolume,
+        onOpenEqualizer = { viewModel.setNowPlayingExpanded(false); currentDestination = NavDestination.Equalizer },
+        onOpenSleepTimer = { viewModel.setSleepTimerOpen(true) },
+        onAddToPlaylist = viewModel::showAddToPlaylistDialog,
+        onDownload = viewModel::downloadTrack,
+        onRemoveDownload = viewModel::removeDownloadedTrack,
+        isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id),
+        lyricsAutoScroll = settingsState.lyricsAutoScroll,
+        visualizerHighFps = settingsState.visualizer60fps
       )
 
       if (trackForPlaylistDialog != null) AddToPlaylistDialog(
@@ -241,7 +260,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) activity?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1) },
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >=[...]
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
