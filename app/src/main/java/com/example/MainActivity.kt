@@ -145,9 +145,9 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
             NavigationBarItem(
               selected = selected,
               onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
-              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(item.icon, contentDescription = item.label, tint = if (selected) SpotifyGreen else TextSecondary, modifier = Modifier.size(24.dp)) } },
+              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics[...]
               label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
-              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer),
+              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContai[...]
               modifier = Modifier.testTag("nav_item_${item.route}")
             )
           }
@@ -202,11 +202,12 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
         )
         NavDestination.Equalizer -> EqualizerScreen(
           equalizerState = equalizerState,
-          onSetEqualizerEnabled = viewModel::setEqualizerEnabled,
-          onSetEqualizerPreset = viewModel::setEqualizerPreset,
-          onSetEqualizerBandGain = viewModel::setEqualizerBandGain,
-          onSetBassBoost = viewModel::setBassBoost,
-          onSetVirtualizer = viewModel::setVirtualizer
+          onToggleEnabled = viewModel::setEqualizerEnabled,
+          onSelectPreset = viewModel::setEqualizerPreset,
+          onBandGainChanged = viewModel::setEqualizerBandGain,
+          onBassBoostChanged = viewModel::setBassBoost,
+          onVirtualizerChanged = viewModel::setVirtualizer,
+          onBack = { currentDestination = NavDestination.Home }
         )
       }
 
@@ -222,12 +223,18 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
         isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id), lyricsAutoScroll = settingsState.lyricsAutoScroll, visualizerHighFps = settingsState.visualizer60fps
       )
 
-      if (trackForPlaylistDialog != null) AddToPlaylistDialog(trackForPlaylistDialog, playlists, { viewModel.showAddToPlaylistDialog(null) }, { id, track -> viewModel.addTrackToPlaylist(id, track) })
+      if (trackForPlaylistDialog != null) AddToPlaylistDialog(
+        trackForPlaylistDialog, 
+        playlists, 
+        { viewModel.showAddToPlaylistDialog(null) }, 
+        { id, track -> viewModel.addTrackToPlaylist(id, track) },
+        onCreatePlaylist = viewModel::createPlaylist
+      )
 
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) activity?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101) },
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >=[...]
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
