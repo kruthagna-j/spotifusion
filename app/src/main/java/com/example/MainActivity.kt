@@ -175,7 +175,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
           currentPlayingTrack = playerState.currentTrack,
           isPlaying = playerState.isPlaying,
           onSearchQueryChanged = viewModel::onSearchQueryChanged,
-          onGenreSelected = viewModel::onGenreSelect,
+          onGenreSelected = viewModel::onGenreSelected,
           onTrackClick = { t, q -> viewModel.playTrack(t, q) },
           onToggleLike = viewModel::toggleLike,
           isTrackLiked = { trackId -> viewModel.isTrackLiked(trackId) },
@@ -196,9 +196,9 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
           onPlayAll = { tracks -> viewModel.playTrack(tracks.first(), tracks) },
           onShufflePlay = { tracks -> viewModel.playTrack(tracks.random(), tracks) },
           onToggleLike = viewModel::toggleLike,
-          onCreatePlaylistDialog = viewModel::showCreatePlaylistDialog,
+          onCreatePlaylistDialog = { viewModel.showAddToPlaylistDialog(null) },
           onDeletePlaylist = viewModel::deletePlaylist,
-          onScanLocalTracks = viewModel::scanLocalTracks,
+          onScanLocalTracks = viewModel::scanLocalMusic,
           onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist
         )
         NavDestination.Equalizer -> EqualizerScreen(
@@ -238,7 +238,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) { android.util.Log.d("MainActivity", "Notification permission requested") } },
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) activity?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1) },
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
