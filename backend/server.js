@@ -31,8 +31,8 @@ function cleanText(value) {
   return "";
 }
 
-function thumbnail(video) {
-  const thumbs = video?.thumbnails || [];
+function thumbnail(source) {
+  const thumbs = source?.thumbnails || source?.thumbnail || [];
   return thumbs.length ? thumbs[thumbs.length - 1]?.url || "" : "";
 }
 
@@ -88,15 +88,44 @@ async function resolveStream(videoId, quality = "High (320kbps)") {
   return value;
 }
 
-app.get("/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.1.1", youtube: Boolean(youtubePromise) }));
-app.get("/api/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.1.1", youtube: Boolean(youtubePromise) }));
+function textFromNode(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node.toString === "function" && node.constructor?.name === "Text") return node.toString();
+  if (typeof node.text === "string") return node.text;
+  if (Array.isArray(node.runs)) return node.runs.map((run) => run?.text || "").join("");
+  return "";
+}
+
+function normalizeLyrics(shelf) {
+  const text = textFromNode(shelf?.description || shelf?.text || shelf?.contents);
+  if (!text) return { available: false, lyrics: "", syncedLyrics: "" };
+  const cleaned = text.replace(/\r\n/g, "\n").trim();
+  return { available: cleaned.length > 0, lyrics: cleaned, syncedLyrics: "" };
+}
+
+function mapMusicItem(item) {
+  return {
+    id: item?.id || item?.video_id || "",
+    videoId: item?.id || item?.video_id || "",
+    title: cleanText(item?.title || item?.name || ""),
+    artist: cleanText(item?.artist?.name || item?.author?.name || "Unknown Artist"),
+    album: cleanText(item?.album?.name || ""),
+    thumbnail: thumbnail(item),
+    durationSeconds: Number(item?.duration_seconds || item?.duration?.seconds || 0)
+  };
+}
+
+app.get("/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.2.0", youtube: Boolean(youtubePromise) }));
+app.get("/api/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.2.0", youtube: Boolean(youtubePromise) }));
 
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.query || req.query.q || "").trim();
   const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 50);
   if (query.length < 2) return res.status(400).json({ error: "INVALID_QUERY", message: "Search query must contain at least 2 characters." });
   try {
-    res.json({ results: await searchYouTube(query, limit), query, category: String(req.query.category || "all"), batch: Number(req.query.batch || 1) });
+    const results = await searchYouTube(query, limit);
+    res.json({ results, query, category: String(req.query.category || "all"), batch: Number(req.query.batch || 1), pageSize: results.length, hasMore: results.length >= limit, available: true });
   } catch (error) {
     console.error("search", error);
     res.status(502).json({ error: "SEARCH_FAILED", message: "YouTube search is temporarily unavailable." });
@@ -128,14 +157,52 @@ app.get("/api/song/:videoId", async (req, res) => {
   }
 });
 
-app.get("/api/lyrics/:videoId", (_req, res) => res.json({ available: false, lyrics: "", syncedLyrics: "" }));
+app.get("/api/lyrics/:videoId", async (req, res) => {
+  const videoId = String(req.params.videoId || "").trim();
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return res.status(400).json({ error: "INVALID_VIDEO_ID" });
+  try {
+    const yt = await getYouTube();
+    const shelf = await yt.music.getLyrics(videoId);
+    res.json(normalizeLyrics(shelf));
+  } catch (error) {
+    console.error("lyrics", videoId, error);
+    res.json({ available: false, lyrics: "", syncedLyrics: "" });
+  }
+});
+
+app.get("/api/artist/:artistId", async (req, res) => {
+  const artistId = String(req.params.artistId || "").trim();
+  if (!artistId) return res.status(400).json({ error: "INVALID_ARTIST_ID" });
+  try {
+    const yt = await getYouTube();
+    const artist = await yt.music.getArtist(artistId);
+    res.json({ id: artistId, name: cleanText(artist?.header?.title || artist?.title || artist?.name || "Unknown Artist"), thumbnail: thumbnail(artist?.header) });
+  } catch (error) {
+    console.error("artist", artistId, error);
+    res.status(502).json({ error: "ARTIST_LOOKUP_FAILED" });
+  }
+});
+
+app.get("/api/album/:albumId", async (req, res) => {
+  const albumId = String(req.params.albumId || "").trim();
+  if (!albumId) return res.status(400).json({ error: "INVALID_ALBUM_ID" });
+  try {
+    const yt = await getYouTube();
+    const album = await yt.music.getAlbum(albumId);
+    res.json({ id: albumId, name: cleanText(album?.header?.title || album?.title || "Unknown Album"), thumbnail: thumbnail(album?.header), tracks: [] });
+  } catch (error) {
+    console.error("album", albumId, error);
+    res.status(502).json({ error: "ALBUM_LOOKUP_FAILED" });
+  }
+});
 
 app.get("/api/discover", async (_req, res) => {
   try {
-    res.json({ sections: [{ id: "discover", title: "Discover", tracks: await searchYouTube("new music 2026", 20) }] });
+    const year = new Date().getUTCFullYear();
+    res.json({ sections: [{ id: "discover", title: "Discover", tracks: await searchYouTube(`new music ${year}`, 20) }], cached: false });
   } catch (error) {
     console.error("discover", error);
-    res.json({ sections: [] });
+    res.json({ sections: [], cached: false });
   }
 });
 
