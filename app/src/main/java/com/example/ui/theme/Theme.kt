@@ -13,31 +13,31 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val SpotifusionDarkColorScheme = darkColorScheme(
-  primary = Color(0xFFB8FF3D),
-  onPrimary = Color(0xFF0A0D08),
-  primaryContainer = Color(0xFF28351A),
-  onPrimaryContainer = Color(0xFFD7FFA0),
-  secondary = Color(0xFF3CC8FF),
+  primary = Color(0xFF7B51FB),
+  onPrimary = Color.White,
+  primaryContainer = Color(0xFF24154F),
+  onPrimaryContainer = Color(0xFFE5DCFF),
+  secondary = Color(0xFF61C8FF),
   onSecondary = Color(0xFF061018),
-  secondaryContainer = Color(0xFF1A2029),
-  onSecondaryContainer = Color(0xFFF4F7FB),
-  tertiary = Color(0xFF9B7CFF),
-  onTertiary = Color(0xFF100A20),
-  background = Color(0xFF07080B),
-  onBackground = Color(0xFFF5F7FA),
-  surface = Color(0xFF0D0F14),
-  onSurface = Color(0xFFF5F7FA),
-  surfaceVariant = Color(0xFF11141B),
-  onSurfaceVariant = Color(0xFFA9B0BC),
-  outline = Color(0xFF2A303B),
-  outlineVariant = Color(0xFF4B5563)
+  secondaryContainer = Color(0xFF15263A),
+  onSecondaryContainer = Color(0xFFE4F2FF),
+  tertiary = Color(0xFFB69CFF),
+  onTertiary = Color(0xFF160D2B),
+  background = Color(0xFF05080F),
+  onBackground = Color(0xFFF6F7FB),
+  surface = Color(0xFF0A0F18),
+  onSurface = Color(0xFFF6F7FB),
+  surfaceVariant = Color(0xFF0E1420),
+  onSurfaceVariant = Color(0xFF9AA4B5),
+  outline = Color(0xFF253149),
+  outlineVariant = Color(0xFF4A5A73)
 )
 
 private val SpotifusionLightColorScheme = lightColorScheme(
-  primary = Color(0xFF159447),
+  primary = Color(0xFF6D42E8),
   onPrimary = Color.White,
-  primaryContainer = Color(0xFFDDF7E5),
-  onPrimaryContainer = Color(0xFF0B4D25),
+  primaryContainer = Color(0xFFE9E1FF),
+  onPrimaryContainer = Color(0xFF28135E),
   secondary = Color(0xFF137FA8),
   onSecondary = Color.White,
   secondaryContainer = Color(0xFFDDF3FB),
@@ -56,7 +56,8 @@ private val SpotifusionLightColorScheme = lightColorScheme(
 
 @Composable
 fun SpotiFusionTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
+  // Reference UI is dark AMOLED; keep dark as the default even on light-system devices.
+  darkTheme: Boolean = true,
   content: @Composable () -> Unit
 ) {
   val view = LocalView.current
@@ -75,9 +76,5 @@ fun SpotiFusionTheme(
     }
   }
 
-  MaterialTheme(
-    colorScheme = scheme,
-    typography = Typography,
-    content = content
-  )
+  MaterialTheme(colorScheme = scheme, typography = Typography, content = content)
 }
