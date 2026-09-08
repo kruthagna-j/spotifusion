@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -145,9 +146,9 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
             NavigationBarItem(
               selected = selected,
               onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
-              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics[...]
+              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else Color.Transparent)) },
               label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
-              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContai[...]
+              colors = NavigationBarItemDefaults.colors(selectedIconColor = SpotifyGreen, selectedTextColor = SpotifyGreen, unselectedIconColor = TextMuted, unselectedTextColor = TextMuted),
               modifier = Modifier.testTag("nav_item_${item.route}")
             )
           }
@@ -224,11 +225,11 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       )
 
       if (trackForPlaylistDialog != null) AddToPlaylistDialog(
-        trackForPlaylistDialog, 
-        playlists, 
-        { viewModel.showAddToPlaylistDialog(null) }, 
+        trackForPlaylistDialog,
+        playlists,
+        { viewModel.showAddToPlaylistDialog(null) },
         { id, track -> viewModel.addTrackToPlaylist(id, track) },
-        onCreatePlaylist = { name, description, track -> 
+        onCreatePlaylist = { name, description, track ->
           viewModel.createPlaylist(name, description)
           viewModel.addTrackToPlaylist(playlists.find { it.title == name }?.id ?: "", track)
         }
@@ -237,7 +238,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >=[...]
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) { android.util.Log.d("MainActivity", "Notification permission requested") } },
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
