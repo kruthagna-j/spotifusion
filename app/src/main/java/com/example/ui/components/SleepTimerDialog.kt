@@ -8,37 +8,34 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.BgDark
+import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.GlassBorder
-import com.example.ui.theme.ImmersivePrimary
-import com.example.ui.theme.ImmersiveSecondaryContainer
-import com.example.ui.theme.ImmersiveSurfaceCard
-import com.example.ui.theme.SpotifyGreen
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceElevated
 import com.example.ui.theme.TextMuted
@@ -46,125 +43,34 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
 @Composable
-fun SleepTimerDialog(
-  activeMinutes: Int?,
-  remainingSec: Int,
-  onSetTimer: (Int?) -> Unit,
-  onDismiss: () -> Unit
-) {
-  val durations = listOf(5, 10, 15, 30, 45, 60)
-
-  Dialog(onDismissRequest = onDismiss) {
-    Surface(
-      shape = RoundedCornerShape(24.dp),
-      color = SurfaceCard,
-      border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(16.dp)
-        .testTag("sleep_timer_dialog")
-    ) {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(20.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              Icons.Default.Timer,
-              contentDescription = "Sleep Timer",
-              tint = SpotifyGreen,
-              modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-              text = "Sleep Timer",
-              style = MaterialTheme.typography.titleMedium,
-              fontWeight = FontWeight.Bold,
-              color = TextPrimary
-            )
-          }
-
-          IconButton(onClick = onDismiss) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
-          }
+fun SleepTimerDialog(activeMinutes: Int?, remainingSec: Int, onSetTimer: (Int?) -> Unit, onDismiss: () -> Unit) {
+  val options = listOf(0, 5, 10, 15, 30, 60)
+  var selected by remember { mutableStateOf(activeMinutes ?: 0) }
+  Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Box(Modifier.fillMaxSize().background(BgDark).padding(horizontal = 16.dp)) {
+      Column(Modifier.fillMaxSize().padding(top = 12.dp, bottom = 18.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(20.dp).clickable(onClick = onDismiss))
+          Spacer(Modifier.size(10.dp)); Text("Sleep Timer", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         }
-
-        if (activeMinutes != null && remainingSec > 0) {
-          val mins = remainingSec / 60
-          val secs = remainingSec % 60
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .padding(vertical = 8.dp)
-              .clip(RoundedCornerShape(12.dp))
-              .background(ImmersiveSecondaryContainer)
-              .padding(12.dp),
-            contentAlignment = Alignment.Center
-          ) {
-            Text(
-              text = "Stopping playback in %02d:%02d".format(mins, secs),
-              style = MaterialTheme.typography.bodyMedium,
-              fontWeight = FontWeight.Bold,
-              color = SpotifyGreen
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        durations.chunked(2).forEach { rowItems ->
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            rowItems.forEach { min ->
-              val isSelected = activeMinutes == min
-              Box(
-                modifier = Modifier
-                  .weight(1f)
-                  .padding(vertical = 4.dp)
-                  .clip(RoundedCornerShape(12.dp))
-                  .background(if (isSelected) SpotifyGreen else SurfaceElevated)
-                  .border(1.dp, if (isSelected) SpotifyGreen else GlassBorder, RoundedCornerShape(12.dp))
-                  .clickable {
-                    onSetTimer(min)
-                    onDismiss()
-                  }
-                  .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-              ) {
-                Text(
-                  text = "$min Minutes",
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                  color = if (isSelected) BgDark else TextPrimary
-                )
+        Spacer(Modifier.height(18.dp))
+        Text("Now Playing", color = TextMuted, fontSize = 8.sp)
+        Text("Choose when playback should stop", color = TextSecondary, fontSize = 10.sp)
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(SurfaceCard).border(1.dp, GlassBorder, RoundedCornerShape(10.dp))) {
+          options.forEach { min ->
+            Row(Modifier.fillMaxWidth().clickable { selected = min }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+              Box(Modifier.size(15.dp).border(1.5.dp, if (selected == min) BrandPurple else TextSecondary, androidx.compose.foundation.shape.CircleShape), Alignment.Center) {
+                if (selected == min) Box(Modifier.size(7.dp).background(BrandPurple, androidx.compose.foundation.shape.CircleShape))
               }
+              Spacer(Modifier.size(10.dp))
+              Text(if (min == 0) "Off" else if (min == 60) "1 hour" else "$min minutes", color = TextPrimary, fontSize = 10.sp)
             }
           }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (activeMinutes != null) {
-          TextButton(
-            onClick = {
-              onSetTimer(null)
-              onDismiss()
-            },
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("cancel_sleep_timer_button")
-          ) {
-            Text("Turn off timer", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
-          }
-        }
+        Spacer(Modifier.weight(1f))
+        if (remainingSec > 0) Text("Remaining: %02d:%02d".format(remainingSec / 60, remainingSec % 60), color = BrandPurple, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))
+        Button(onClick = { onSetTimer(if (selected == 0) null else selected); onDismiss() }, modifier = Modifier.fillMaxWidth().height(42.dp), shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandPurple)) { Text("Set Timer", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
       }
     }
   }
