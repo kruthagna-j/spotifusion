@@ -15,6 +15,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.MainActivity
 import com.example.model.EqualizerState
+import kotlin.math.abs
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
@@ -26,6 +27,7 @@ class PlaybackService : MediaSessionService() {
 
   companion object {
     private const val TAG = "PlaybackService"
+    private val TARGET_FREQUENCIES_HZ = floatArrayOf(60f, 230f, 910f, 3600f, 14000f)
     private var instance: PlaybackService? = null
     private var pendingEqualizerState: EqualizerState = EqualizerState()
 
@@ -45,23 +47,18 @@ class PlaybackService : MediaSessionService() {
           .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
           .setUsage(C.USAGE_MEDIA)
           .build(),
-        true // handleAudioFocus
+        true
       )
       .setHandleAudioBecomingNoisy(true)
       .build().apply {
         repeatMode = Player.REPEAT_MODE_ALL
-
         addListener(object : Player.Listener {
           override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) {
-              setupAudioEffects(audioSessionId)
-            }
+            if (playbackState == Player.STATE_READY) setupAudioEffects(audioSessionId)
           }
 
           override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) {
-              setupAudioEffects(audioSessionId)
-            }
+            if (isPlaying) setupAudioEffects(audioSessionId)
           }
         })
       }
@@ -82,21 +79,13 @@ class PlaybackService : MediaSessionService() {
     if (sessionId == C.AUDIO_SESSION_ID_UNSET || sessionId == 0) return
     try {
       if (hwEqualizer == null || hwEqualizer?.hasControl() != true) {
-        hwEqualizer = Equalizer(0, sessionId).apply {
-          enabled = pendingEqualizerState.isEnabled
-        }
+        hwEqualizer = Equalizer(0, sessionId)
       }
       if (hwBassBoost == null) {
-        hwBassBoost = BassBoost(0, sessionId).apply {
-          enabled = pendingEqualizerState.isEnabled
-          setStrength((pendingEqualizerState.bassBoost * 1000).toInt().toShort())
-        }
+        hwBassBoost = BassBoost(0, sessionId)
       }
       if (hwVirtualizer == null) {
-        hwVirtualizer = Virtualizer(0, sessionId).apply {
-          enabled = pendingEqualizerState.isEnabled
-          setStrength((pendingEqualizerState.virtualizer * 1000).toInt().toShort())
-        }
+        hwVirtualizer = Virtualizer(0, sessionId)
       }
       updateAudioEffects(pendingEqualizerState)
     } catch (e: Exception) {
@@ -110,36 +99,51 @@ class PlaybackService : MediaSessionService() {
       hwBassBoost?.enabled = state.isEnabled
       hwVirtualizer?.enabled = state.isEnabled
 
-      if (state.isEnabled) {
-        val numBands = hwEqualizer?.numberOfBands?.toInt() ?: 0
-        for (i in 0 until numBands) {
-          val gainDb = state.bandGains.getOrElse(i) { 0f }
-          val milliBels = (gainDb * 100).toInt().toShort()
-          hwEqualizer?.setBandLevel(i.toShort(), milliBels)
+      if (!state.isEnabled) return
+
+      val equalizer = hwEqualizer
+      if (equalizer != null) {
+        val numberOfBands = equalizer.numberOfBands.toInt()
+        val lower = equalizer.bandLevelRange[0].toInt()
+        val upper = equalizer.bandLevelRange[1].toInt()
+
+        // Devices expose different numbers of EQ bands. Map each hardware band
+        // to the nearest one of Spotifusion's five UI bands instead of assuming
+        // the device has exactly five bands.
+        for (band in 0 until numberOfBands) {
+          val centerHz = equalizer.getCenterFreq(band.toShort()) / 1000f
+          var nearest = 0
+          var nearestDistance = Float.MAX_VALUE
+          for (target in TARGET_FREQUENCIES_HZ.indices) {
+            val distance = abs(centerHz - TARGET_FREQUENCIES_HZ[target])
+            if (distance < nearestDistance) {
+              nearestDistance = distance
+              nearest = target
+            }
+          }
+
+          val requestedMilliBel = (state.bandGains.getOrElse(nearest) { 0f } * 100f).toInt()
+          val clampedMilliBel = requestedMilliBel.coerceIn(lower, upper).toShort()
+          equalizer.setBandLevel(band.toShort(), clampedMilliBel)
         }
-        hwBassBoost?.setStrength((state.bassBoost * 1000).toInt().toShort())
-        hwVirtualizer?.setStrength((state.virtualizer * 1000).toInt().toShort())
       }
+
+      hwBassBoost?.setStrength((state.bassBoost.coerceIn(0f, 1f) * 1000f).toInt().toShort())
+      hwVirtualizer?.setStrength((state.virtualizer.coerceIn(0f, 1f) * 1000f).toInt().toShort())
     } catch (e: Exception) {
       Log.w(TAG, "Could not apply hardware EQ: ${e.message}")
     }
   }
 
-  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-    return mediaSession
-  }
+  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
   override fun onTaskRemoved(rootIntent: Intent?) {
     val player = mediaSession?.player
-    if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-      stopSelf()
-    }
+    if (player == null || !player.playWhenReady || player.mediaItemCount == 0) stopSelf()
   }
 
   override fun onDestroy() {
-    if (instance === this) {
-      instance = null
-    }
+    if (instance === this) instance = null
     try {
       hwEqualizer?.release()
       hwBassBoost?.release()
