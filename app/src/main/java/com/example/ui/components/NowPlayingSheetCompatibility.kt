@@ -35,11 +35,11 @@ fun NowPlayingSheet(
   onOpenEqualizer: () -> Unit,
   onOpenSleepTimer: () -> Unit = {},
   onAddToPlaylist: (Track) -> Unit,
-  onDownload: (Track) -> Unit = {},
-  onRemoveDownload: (Track) -> Unit = {},
-  isDownloaded: Boolean = false,
-  lyricsAutoScroll: Boolean = true,
-  visualizerHighFps: Boolean = true
+  onDownload: (Track) -> Unit,
+  onRemoveDownload: (Track) -> Unit,
+  isDownloaded: Boolean,
+  lyricsAutoScroll: Boolean,
+  visualizerHighFps: Boolean
 ) {
   NowPlayingSheet(
     track = track,
