@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -119,6 +120,8 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val trackForPlaylistDialog by viewModel.trackForPlaylistDialog.collectAsStateWithLifecycle()
   val isCurrentTrackLiked = playerState.currentTrack?.let { viewModel.isTrackLiked(it.id) } ?: false
   val navItems = listOf(NavDestination.Home, NavDestination.Search, NavDestination.Library, NavDestination.Equalizer)
+  val context = LocalContext.current
+  val activity = context as? ComponentActivity
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
@@ -142,9 +145,9 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
             NavigationBarItem(
               selected = selected,
               onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) },
-              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent).border(if (selected) 1.dp else 0.dp, if (selected) SpotifyGreen.copy(alpha = .28f) else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(14.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(item.icon, item.label, Modifier.size(if (selected) 23.dp else 22.dp)) } },
+              icon = { Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else androidx.compose.ui.graphics.Color.Transparent)) },
               label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
-              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, unselectedIconColor = TextSecondary.copy(alpha = .6f), unselectedTextColor = TextMuted, indicatorColor = com.example.ui.theme.ImmersiveSecondaryContainer),
+              colors = NavigationBarItemDefaults.colors(selectedIconColor = com.example.ui.theme.ImmersiveOnSecondaryContainer, selectedTextColor = com.example.ui.theme.ImmersiveOnSecondaryContainer),
               modifier = Modifier.testTag("nav_item_${item.route}")
             )
           }
@@ -164,8 +167,8 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
           onNavigateToLibrary = { currentDestination = NavDestination.Library },
           onOpenSettings = { viewModel.setSettingsOpen(true) }
         )
-        NavDestination.Search -> SearchScreen(searchQuery, selectedGenre, searchResults, playerState.currentTrack, playerState.isPlaying, viewModel::onSearchQueryChanged, viewModel::onGenreSelected, { t, q -> viewModel.playTrack(t, q) }, viewModel::toggleLike, { viewModel.isTrackLiked(it) }, { viewModel.showAddToPlaylistDialog(it) })
-        NavDestination.Library -> LibraryScreen(playlists, likedTracks, recentHistory, localTracks, downloadedTracks, selectedPlaylist, selectedPlaylistTracks, playerState.currentTrack, playerState.isPlaying, viewModel::selectPlaylist, { t, q -> viewModel.playTrack(t, q) }, { t -> if (t.isNotEmpty()) viewModel.playQueue(t, 0) }, { t -> if (t.isNotEmpty()) viewModel.shufflePlay(t) }, viewModel::toggleLike, { viewModel.createPlaylist("My SpotiFusion Mix", "Created from Library") }, viewModel::deletePlaylist, viewModel::scanLocalMusic, viewModel::removeTrackFromPlaylist)
+        NavDestination.Search -> SearchScreen(searchQuery, selectedGenre, searchResults, playerState.currentTrack, playerState.isPlaying, viewModel::onSearchQueryChanged, viewModel::onGenreSelected)
+        NavDestination.Library -> LibraryScreen(playlists, likedTracks, recentHistory, localTracks, downloadedTracks, selectedPlaylist, selectedPlaylistTracks, playerState.currentTrack, playerState.isPlaying, { t, q -> viewModel.playTrack(t, q) }, { viewModel.selectPlaylist(it) }, { t, p -> viewModel.removeTrackFromPlaylist(p, t) }, { viewModel.removePlaylist(it) })
         NavDestination.Equalizer -> EqualizerScreen(equalizerState, viewModel::setEqualizerEnabled, viewModel::setEqualizerPreset, viewModel::setEqualizerBandGain, viewModel::setBassBoost, viewModel::setVirtualizer) { currentDestination = NavDestination.Home }
       }
 
@@ -186,7 +189,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       if (isSettingsOpen) SettingsSheet(
         settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
         onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44) },
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= 33) activity?.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44) },
         onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
