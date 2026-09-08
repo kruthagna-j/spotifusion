@@ -29,7 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.clip
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,7 +101,7 @@ fun HomeScreen(
           LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(recentTracks.take(8), key = { it.id }) { track ->
               Column(modifier = Modifier.width(132.dp).clickable { onTrackClick(track, recentTracks) }) {
-                AsyncImage(model = track.thumbnailUrl, contentDescription = track.title, modifier = Modifier.size(132.dp).clip(RoundedCornerShape(16.dp)))
+                AsyncImage(model = track.coverUrl, contentDescription = track.title, modifier = Modifier.size(132.dp).clip(RoundedCornerShape(16.dp)))
                 Spacer(Modifier.height(7.dp))
                 Text(track.title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
                 Text(track.artist, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
@@ -125,7 +125,7 @@ fun HomeScreen(
               modifier = Modifier.fillMaxWidth().clickable { onTrackClick(track, tracks) }.padding(vertical = 7.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              AsyncImage(model = track.thumbnailUrl, contentDescription = track.title, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)))
+              AsyncImage(model = track.coverUrl, contentDescription = track.title, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)))
               Spacer(Modifier.width(12.dp))
               Column(modifier = Modifier.weight(1f)) {
                 Text(track.title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
