@@ -57,15 +57,24 @@ async function searchYouTube(query, limit = 20) {
 }
 
 async function resolveStream(videoId, quality = "High (320kbps)") {
-  const cached = streamCache.get(`${videoId}:${quality}`);
+  const cacheKey = `${videoId}:${quality}`;
+  const cached = streamCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const yt = await getYouTube();
   const info = await yt.getBasicInfo(videoId);
   const targetBitrate = quality.startsWith("Normal") ? 160000 : quality.startsWith("Maximum") ? 512000 : 320000;
-  const format = info.chooseFormat({ type: "audio", quality: "best" });
+  const candidates = (info.streaming_data?.adaptive_formats || info.streaming_data?.formats || [])
+    .filter((format) => String(format.mime_type || "").startsWith("audio/"))
+    .filter((format) => Number(format.bitrate || 0) > 0);
+
+  let format = candidates.sort((a, b) => Math.abs(Number(a.bitrate) - targetBitrate) - Math.abs(Number(b.bitrate) - targetBitrate))[0];
+  if (!format) format = info.chooseFormat({ type: "audio", quality: "best" });
   if (!format) throw new Error("No audio format available");
-  const url = await format.decipher(yt.session.player);
+
+  const url = format.url || await format.decipher(yt.session.player);
+  if (!url) throw new Error("Unable to decipher audio stream");
+
   const value = {
     videoId,
     url,
@@ -73,28 +82,21 @@ async function resolveStream(videoId, quality = "High (320kbps)") {
     bitrate: Number(format.bitrate || targetBitrate),
     durationSeconds: Number(info.basic_info?.duration || 0),
     title: cleanText(info.basic_info?.title),
-    artist: cleanText(info.basic_info?.author?.name || info.basic_info?.channel?.name || "Unknown Artist"),
-    thumbnail: thumbnail(info.basic_info)
+    artist: cleanText(info.basic_info?.author?.name || info.basic_info?.channel?.name || "Unknown Artist")
   };
-  streamCache.set(`${videoId}:${quality}`, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  streamCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });
   return value;
 }
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "spotifusion-backend", version: "1.1.0", youtube: Boolean(youtubePromise) });
-});
-
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "spotifusion-backend", version: "1.1.0", youtube: Boolean(youtubePromise) });
-});
+app.get("/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.1.1", youtube: Boolean(youtubePromise) }));
+app.get("/api/health", (_req, res) => res.json({ ok: true, service: "spotifusion-backend", version: "1.1.1", youtube: Boolean(youtubePromise) }));
 
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.query || req.query.q || "").trim();
   const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 50);
   if (query.length < 2) return res.status(400).json({ error: "INVALID_QUERY", message: "Search query must contain at least 2 characters." });
   try {
-    const results = await searchYouTube(query, limit);
-    res.json({ results, query });
+    res.json({ results: await searchYouTube(query, limit), query, category: String(req.query.category || "all"), batch: Number(req.query.batch || 1) });
   } catch (error) {
     console.error("search", error);
     res.status(502).json({ error: "SEARCH_FAILED", message: "YouTube search is temporarily unavailable." });
@@ -119,29 +121,18 @@ app.get("/api/song/:videoId", async (req, res) => {
   try {
     const yt = await getYouTube();
     const info = await yt.getBasicInfo(videoId);
-    res.json({
-      id: videoId,
-      videoId,
-      title: cleanText(info.basic_info?.title),
-      artist: cleanText(info.basic_info?.author?.name || info.basic_info?.channel?.name || "Unknown Artist"),
-      durationSeconds: Number(info.basic_info?.duration || 0),
-      thumbnail: thumbnail(info.basic_info)
-    });
+    res.json({ id: videoId, videoId, title: cleanText(info.basic_info?.title), artist: cleanText(info.basic_info?.author?.name || info.basic_info?.channel?.name || "Unknown Artist"), durationSeconds: Number(info.basic_info?.duration || 0), thumbnail: thumbnail(info.basic_info) });
   } catch (error) {
     console.error("song", videoId, error);
     res.status(502).json({ error: "SONG_LOOKUP_FAILED" });
   }
 });
 
-app.get("/api/lyrics/:videoId", (_req, res) => {
-  // Lyrics are optional metadata; the Android client already supports track lyrics.
-  res.json({ lyrics: [], syncedLyrics: [] });
-});
+app.get("/api/lyrics/:videoId", (_req, res) => res.json({ available: false, lyrics: "", syncedLyrics: "" }));
 
 app.get("/api/discover", async (_req, res) => {
   try {
-    const results = await searchYouTube("new music 2026", 20);
-    res.json({ sections: [{ title: "Discover", tracks: results }] });
+    res.json({ sections: [{ id: "discover", title: "Discover", tracks: await searchYouTube("new music 2026", 20) }] });
   } catch (error) {
     console.error("discover", error);
     res.json({ sections: [] });
@@ -149,5 +140,4 @@ app.get("/api/discover", async (_req, res) => {
 });
 
 app.use((_req, res) => res.status(404).json({ error: "NOT_FOUND" }));
-
 app.listen(PORT, "0.0.0.0", () => console.log(`Spotifusion backend listening on ${PORT}`));
