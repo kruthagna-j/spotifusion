@@ -80,39 +80,19 @@ class MainActivity : ComponentActivity() {
       .onFailure { android.util.Log.e("MainActivity", "PlaybackController connection failed", it) }
     runCatching {
       val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-      if (auth.currentUser == null) {
-        auth.signInAnonymously().addOnFailureListener { e ->
-          android.util.Log.w("MainActivity", "Firebase anonymous auth failed: ${e.message}")
-        }
+      if (auth.currentUser == null) auth.signInAnonymously().addOnFailureListener { e ->
+        android.util.Log.w("MainActivity", "Firebase anonymous auth failed: ${e.message}")
       }
     }.onFailure { android.util.Log.w("MainActivity", "Firebase init failed", it) }
-
-    shakeDetector = ShakeDetector(this) {
-      if (viewModel.settingsState.value.shakeToSkipEnabled) viewModel.nextTrack()
-    }
-
+    shakeDetector = ShakeDetector(this) { if (viewModel.settingsState.value.shakeToSkipEnabled) viewModel.nextTrack() }
     setContent {
       val settingsState by viewModel.settingsState.collectAsStateWithLifecycle()
-      SpotiFusionTheme(darkTheme = settingsState.darkTheme) {
-        SpotiFusionApp(viewModel)
-      }
+      SpotiFusionTheme(darkTheme = settingsState.darkTheme) { SpotiFusionApp(viewModel) }
     }
   }
-
-  override fun onResume() {
-    super.onResume()
-    shakeDetector?.start()
-  }
-
-  override fun onPause() {
-    shakeDetector?.stop()
-    super.onPause()
-  }
-
-  override fun onDestroy() {
-    runCatching { com.example.service.PlaybackController.disconnect() }
-    super.onDestroy()
-  }
+  override fun onResume() { super.onResume(); shakeDetector?.start() }
+  override fun onPause() { shakeDetector?.stop(); super.onPause() }
+  override fun onDestroy() { runCatching { com.example.service.PlaybackController.disconnect() }; super.onDestroy() }
 }
 
 @Composable
@@ -125,9 +105,7 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val localTracks by viewModel.localTracks.collectAsStateWithLifecycle()
   val catalogTracks by viewModel.catalogTracks.collectAsStateWithLifecycle()
   val downloadedIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
-  val downloadedTracks = remember(catalogTracks, localTracks, downloadedIds) {
-    (catalogTracks + localTracks).distinctBy { it.id }.filter { it.id in downloadedIds }
-  }
+  val downloadedTracks = remember(catalogTracks, localTracks, downloadedIds) { (catalogTracks + localTracks).distinctBy { it.id }.filter { it.id in downloadedIds } }
   val equalizerState by viewModel.equalizerState.collectAsStateWithLifecycle()
   val settingsState by viewModel.settingsState.collectAsStateWithLifecycle()
   val currentSyncedLyrics by viewModel.currentSyncedLyrics.collectAsStateWithLifecycle()
@@ -147,70 +125,21 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   val activity = LocalContext.current as? ComponentActivity
 
   Scaffold(
-    modifier = Modifier.fillMaxSize(),
-    containerColor = BgDark,
+    modifier = Modifier.fillMaxSize(), containerColor = BgDark,
     contentWindowInsets = WindowInsets(0, 0, 0, 0),
     bottomBar = {
-      Column(
-        Modifier.fillMaxWidth().background(SurfaceDark).navigationBarsPadding()
-      ) {
+      Column(Modifier.fillMaxWidth().background(SurfaceDark).navigationBarsPadding()) {
         playerState.currentTrack?.let { currentTrack ->
-          MiniPlayerBar(
-            currentTrack = currentTrack,
-            isPlaying = playerState.isPlaying,
-            currentPositionSec = playerState.currentPositionSec,
-            durationSec = playerState.durationSec,
-            isLiked = isCurrentTrackLiked,
-            onTogglePlayPause = viewModel::togglePlayPause,
-            onNextTrack = viewModel::nextTrack,
-            onToggleLike = viewModel::toggleLike,
-            onClickBar = { viewModel.setNowPlayingExpanded(true) }
-          )
+          MiniPlayerBar(currentTrack, playerState.isPlaying, playerState.currentPositionSec, playerState.durationSec, isCurrentTrackLiked, viewModel::togglePlayPause, viewModel::nextTrack, viewModel::toggleLike) { viewModel.setNowPlayingExpanded(true) }
         }
-        NavigationBar(
-          containerColor = SurfaceDark,
-          contentColor = SpotifyGreen,
-          tonalElevation = 0.dp,
-          windowInsets = WindowInsets(0, 0, 0, 0),
-          modifier = Modifier.fillMaxWidth().border(1.dp, GlassBorder).height(64.dp).testTag("main_bottom_nav_bar")
-        ) {
+        NavigationBar(containerColor = SurfaceDark, contentColor = SpotifyGreen, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0), modifier = Modifier.fillMaxWidth().border(1.dp, GlassBorder).height(64.dp).testTag("main_bottom_nav_bar")) {
           navItems.forEach { item ->
             val selected = currentDestination.route == item.route
-            NavigationBarItem(
-              selected = selected,
-              onClick = {
-                currentDestination = item
-                if (item == NavDestination.Library) viewModel.selectPlaylist(null)
-              },
-              icon = {
-                Box(
-                  Modifier
-                    .size(if (selected) 42.dp else 38.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (selected) SpotifyGreen.copy(alpha = .16f) else Color.Transparent)
-                ) {
-                  Icon(
-                    imageVector = item.icon,
-                    contentDescription = item.label,
-                    modifier = Modifier.fillMaxSize().padding(9.dp)
-                  )
-                }
-              },
-              label = {
-                Text(
-                  item.label,
-                  fontSize = 11.sp,
-                  fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                )
-              },
-              colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = SpotifyGreen,
-                selectedTextColor = SpotifyGreen,
-                unselectedIconColor = TextMuted,
-                unselectedTextColor = TextMuted
-              ),
-              modifier = Modifier.testTag("nav_item_${item.route}")
-            )
+            NavigationBarItem(selected = selected, onClick = { currentDestination = item; if (item == NavDestination.Library) viewModel.selectPlaylist(null) }, icon = {
+              Box(Modifier.size(if (selected) 42.dp else 38.dp).clip(RoundedCornerShape(14.dp)).background(if (selected) SpotifyGreen.copy(alpha = .16f) else Color.Transparent)) {
+                Icon(item.icon, item.label, Modifier.fillMaxSize().padding(9.dp))
+              }
+            }, label = { Text(item.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = SpotifyGreen, selectedTextColor = SpotifyGreen, unselectedIconColor = TextMuted, unselectedTextColor = TextMuted), modifier = Modifier.testTag("nav_item_${item.route}"))
           }
         }
       }
@@ -218,135 +147,17 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
   ) { innerPadding ->
     Box(Modifier.fillMaxSize().padding(innerPadding)) {
       when (currentDestination) {
-        NavDestination.Home -> HomeScreen(
-          tracks = catalogTracks,
-          recentTracks = recentHistory,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onNavigateToSearch = { currentDestination = NavDestination.Search },
-          onNavigateToLibrary = { currentDestination = NavDestination.Library },
-          onOpenSettings = { viewModel.setSettingsOpen(true) }
-        )
-        NavDestination.Search -> SearchScreen(
-          searchQuery = searchQuery,
-          selectedGenre = selectedGenre,
-          searchResults = searchResults,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          onSearchQueryChanged = viewModel::onSearchQueryChanged,
-          onGenreSelected = viewModel::onGenreSelected,
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onToggleLike = viewModel::toggleLike,
-          isTrackLiked = viewModel::isTrackLiked,
-          onAddToPlaylist = viewModel::showAddToPlaylistDialog
-        )
-        NavDestination.Library -> LibraryScreen(
-          playlists = playlists,
-          likedTracks = likedTracks,
-          recentHistory = recentHistory,
-          localTracks = localTracks,
-          downloadedTracks = downloadedTracks,
-          selectedPlaylist = selectedPlaylist,
-          selectedPlaylistTracks = selectedPlaylistTracks,
-          currentPlayingTrack = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          onSelectPlaylist = viewModel::selectPlaylist,
-          onTrackClick = { track, queue -> viewModel.playTrack(track, queue) },
-          onPlayAll = { tracks -> if (tracks.isNotEmpty()) viewModel.playTrack(tracks.first(), tracks) },
-          onShufflePlay = { tracks -> if (tracks.isNotEmpty()) viewModel.playTrack(tracks.random(), tracks) },
-          onToggleLike = viewModel::toggleLike,
-          onCreatePlaylistDialog = { viewModel.showAddToPlaylistDialog(null) },
-          onDeletePlaylist = viewModel::deletePlaylist,
-          onScanLocalTracks = viewModel::scanLocalMusic,
-          onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist
-        )
-        NavDestination.Equalizer -> EqualizerScreen(
-          equalizerState = equalizerState,
-          onToggleEnabled = viewModel::setEqualizerEnabled,
-          onSelectPreset = viewModel::setEqualizerPreset,
-          onBandGainChanged = viewModel::setEqualizerBandGain,
-          onBassBoostChanged = viewModel::setBassBoost,
-          onVirtualizerChanged = viewModel::setVirtualizer,
-          onBack = { currentDestination = NavDestination.Home }
-        )
+        NavDestination.Home -> HomeScreen(tracks = catalogTracks, recentTracks = recentHistory, currentPlayingTrack = playerState.currentTrack, isPlaying = playerState.isPlaying, onTrackClick = { track, queue -> viewModel.playTrack(track, queue) }, onNavigateToSearch = { currentDestination = NavDestination.Search }, onNavigateToLibrary = { currentDestination = NavDestination.Library }, onOpenSettings = { viewModel.setSettingsOpen(true) })
+        NavDestination.Search -> SearchScreen(searchQuery = searchQuery, onSearchQueryChanged = viewModel::onSearchQueryChanged, searchResults = searchResults, recent = recentHistory, selectedGenre = selectedGenre, genres = listOf("All", "Songs", "Albums", "Artists", "Jukebox"), onGenreSelected = viewModel::onGenreSelected, onTrackClick = { track, queue -> viewModel.playTrack(track, queue) }, onAddToPlaylist = viewModel::showAddToPlaylistDialog, onBack = { currentDestination = NavDestination.Home })
+        NavDestination.Library -> LibraryScreen(playlists = playlists, likedTracks = likedTracks, recentHistory = recentHistory, localTracks = localTracks, downloadedTracks = downloadedTracks, selectedPlaylist = selectedPlaylist, selectedPlaylistTracks = selectedPlaylistTracks, currentPlayingTrack = playerState.currentTrack, isPlaying = playerState.isPlaying, onSelectPlaylist = viewModel::selectPlaylist, onTrackClick = { track, queue -> viewModel.playTrack(track, queue) }, onPlayAll = { tracks -> if (tracks.isNotEmpty()) viewModel.playTrack(tracks.first(), tracks) }, onShufflePlay = { tracks -> if (tracks.isNotEmpty()) viewModel.playTrack(tracks.random(), tracks) }, onToggleLike = viewModel::toggleLike, onCreatePlaylistDialog = { viewModel.showAddToPlaylistDialog(null) }, onDeletePlaylist = viewModel::deletePlaylist, onScanLocalTracks = viewModel::scanLocalMusic, onRemoveTrackFromPlaylist = viewModel::removeTrackFromPlaylist)
+        NavDestination.Equalizer -> EqualizerScreen(equalizerState = equalizerState, onToggleEnabled = viewModel::setEqualizerEnabled, onSelectPreset = viewModel::setEqualizerPreset, onBandGainChanged = viewModel::setEqualizerBandGain, onBassBoostChanged = viewModel::setBassBoost, onVirtualizerChanged = viewModel::setVirtualizer, onBack = { currentDestination = NavDestination.Home })
       }
-
       if (isNowPlayingExpanded && playerState.currentTrack != null) {
-        NowPlayingSheet(
-          track = playerState.currentTrack,
-          isPlaying = playerState.isPlaying,
-          currentPositionSec = playerState.currentPositionSec,
-          durationSec = playerState.durationSec,
-          isLiked = isCurrentTrackLiked,
-          isShuffled = playerState.isShuffled,
-          repeatMode = playerState.repeatMode,
-          volume = playerState.volume,
-          visualizerBars = playerState.visualizerBars,
-          syncedLyrics = currentSyncedLyrics,
-          sleepTimerMinutes = sleepTimerMinutes,
-          onClose = { viewModel.setNowPlayingExpanded(false) },
-          onTogglePlayPause = viewModel::togglePlayPause,
-          onNext = viewModel::nextTrack,
-          onPrevious = viewModel::previousTrack,
-          onSeek = viewModel::seekTo,
-          onToggleShuffle = viewModel::toggleShuffle,
-          onCycleRepeat = viewModel::cycleRepeatMode,
-          onToggleLike = viewModel::toggleLike,
-          onSetVolume = viewModel::setVolume,
-          onOpenEqualizer = {
-            viewModel.setNowPlayingExpanded(false)
-            currentDestination = NavDestination.Equalizer
-          },
-          onOpenSleepTimer = { viewModel.setSleepTimerOpen(true) },
-          onAddToPlaylist = viewModel::showAddToPlaylistDialog,
-          onDownload = viewModel::downloadTrack,
-          onRemoveDownload = viewModel::removeDownloadedTrack,
-          isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id),
-          lyricsAutoScroll = settingsState.lyricsAutoScroll,
-          visualizerHighFps = settingsState.visualizer60fps
-        )
+        NowPlayingSheet(track = playerState.currentTrack, isPlaying = playerState.isPlaying, currentPositionSec = playerState.currentPositionSec, durationSec = playerState.durationSec, isLiked = isCurrentTrackLiked, isShuffled = playerState.isShuffled, repeatMode = playerState.repeatMode, volume = playerState.volume, visualizerBars = playerState.visualizerBars, syncedLyrics = currentSyncedLyrics, sleepTimerMinutes = sleepTimerMinutes, onClose = { viewModel.setNowPlayingExpanded(false) }, onTogglePlayPause = viewModel::togglePlayPause, onNext = viewModel::nextTrack, onPrevious = viewModel::previousTrack, onSeek = viewModel::seekTo, onToggleShuffle = viewModel::toggleShuffle, onCycleRepeat = viewModel::cycleRepeatMode, onToggleLike = viewModel::toggleLike, onSetVolume = viewModel::setVolume, onOpenEqualizer = { viewModel.setNowPlayingExpanded(false); currentDestination = NavDestination.Equalizer }, onOpenSleepTimer = { viewModel.setSleepTimerOpen(true) }, onAddToPlaylist = viewModel::showAddToPlaylistDialog, onDownload = viewModel::downloadTrack, onRemoveDownload = viewModel::removeDownloadedTrack, isDownloaded = viewModel.isTrackDownloaded(playerState.currentTrack.id), lyricsAutoScroll = settingsState.lyricsAutoScroll, visualizerHighFps = settingsState.visualizer60fps)
       }
-
-      trackForPlaylistDialog?.let { track ->
-        AddToPlaylistDialog(
-          track,
-          playlists,
-          { viewModel.showAddToPlaylistDialog(null) },
-          { id, selectedTrack -> viewModel.addTrackToPlaylist(id, selectedTrack) },
-          onCreatePlaylist = { name, description, selectedTrack ->
-            viewModel.createPlaylistAndAddTrack(name, description, selectedTrack)
-          }
-        )
-      }
-
-      if (isSettingsOpen) {
-        SettingsSheet(
-          settings = settingsState,
-          onUpdateAudioQuality = viewModel::updateAudioQuality,
-          onUpdateCrossfade = viewModel::updateCrossfade,
-          onToggleShakeToSkip = viewModel::toggleShakeToSkip,
-          onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-          onToggleVisualizer60fps = viewModel::toggleVisualizer60fps,
-          onToggleNotifications = { enabled ->
-            viewModel.toggleNotifications(enabled)
-            if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-              activity?.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
-            }
-          },
-          onToggleDarkTheme = viewModel::setDarkTheme,
-          onClearCache = viewModel::clearCache,
-          onDismiss = { viewModel.setSettingsOpen(false) }
-        )
-      }
-
-      if (isSleepTimerOpen) {
-        SleepTimerDialog(
-          sleepTimerMinutes,
-          sleepTimerRemainingSec,
-          viewModel::setSleepTimer
-        ) { viewModel.setSleepTimerOpen(false) }
-      }
+      trackForPlaylistDialog?.let { track -> AddToPlaylistDialog(track, playlists, { viewModel.showAddToPlaylistDialog(null) }, { id, selectedTrack -> viewModel.addTrackToPlaylist(id, selectedTrack) }, onCreatePlaylist = { name, description, selectedTrack -> viewModel.createPlaylistAndAddTrack(name, description, selectedTrack) }) }
+      if (isSettingsOpen) SettingsSheet(settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade, onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll, onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) activity?.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0) }, onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) })
+      if (isSleepTimerOpen) SleepTimerDialog(sleepTimerMinutes, sleepTimerRemainingSec, viewModel::setSleepTimer) { viewModel.setSleepTimerOpen(false) }
     }
   }
 }
