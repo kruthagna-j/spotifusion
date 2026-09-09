@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,7 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -55,7 +56,7 @@ fun EqualizerScreen(equalizerState: EqualizerState, onToggleEnabled: (Boolean) -
     }
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      presets.forEachIndexed { i, p ->
+      presets.forEach { p ->
         val selected = equalizerState.activePreset.equals(p, true)
         FilterChip(selected = selected, onClick = { onSelectPreset(p) }, label = { Text(p, fontSize = 8.sp, color = if (selected) Color.White else TextSecondary) }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = BrandPurple, containerColor = SurfaceCard, labelColor = TextSecondary), modifier = Modifier.weight(1f), border = null)
       }
