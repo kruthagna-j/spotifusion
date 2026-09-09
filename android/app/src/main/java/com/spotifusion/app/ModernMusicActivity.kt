@@ -1,7 +1,6 @@
 package com.spotifusion.app
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -11,280 +10,63 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
-import kotlin.math.max
+import java.util.concurrent.TimeUnit
 
-/**
- * Modern Android surface for Spotifusion.
- * Keeps the existing Media3 service and local-library implementation, but replaces
- * the old light shell with the AMOLED / electric-violet product UI.
- */
+/** AMOLED/violet Android shell backed by the real Media3 player and device stores. */
 class ModernMusicActivity : AppCompatActivity() {
-    private val bg = Color.rgb(7, 7, 12)
-    private val surface = Color.rgb(16, 16, 24)
-    private val surface2 = Color.rgb(22, 21, 31)
-    private val border = Color.rgb(43, 40, 58)
-    private val text = Color.rgb(245, 243, 252)
-    private val muted = Color.rgb(151, 146, 166)
-    private val violet = Color.rgb(123, 81, 251)
-    private val violet2 = Color.rgb(92, 55, 210)
-
-    private lateinit var page: FrameLayout
-    private lateinit var miniTitle: TextView
-    private lateinit var miniArtist: TextView
-    private lateinit var miniPlay: TextView
-    private lateinit var nav: LinearLayout
-    private var tracks: List<LocalTrack> = emptyList()
-    private var tab = 0
-    private var searchText = ""
-    private var sleepHandler: Handler? = null
-    private var sleepTask: Runnable? = null
-    private val uiHandler = Handler(Looper.getMainLooper())
-
-    private fun dp(v: Int) = (v * resources.displayMetrics.density + .5f).toInt()
-    private fun tv(s: String, size: Float, color: Int = text, bold: Boolean = false) = TextView(this).apply {
-        text = s; textSize = size; setTextColor(color); includeFontPadding = false
-        if (bold) typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
-    private fun box(color: Int = surface, radius: Int = 18, stroke: Boolean = false) = android.graphics.drawable.GradientDrawable().apply {
-        setColor(color); cornerRadius = dp(radius).toFloat(); if (stroke) setStroke(dp(1), border)
-    }
-    private fun accentBox(radius: Int = 18) = android.graphics.drawable.GradientDrawable(
-        android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-        intArrayOf(violet2, violet)
-    ).apply { cornerRadius = dp(radius).toFloat() }
-
-    override fun onCreate(state: Bundle?) {
-        super.onCreate(state)
-        window.statusBarColor = bg
-        window.navigationBarColor = bg
-        requestPermissionsIfNeeded()
-        PlaybackController.connect(this)
-        tracks = runCatching { LocalMusicScanner.scan(this) }.getOrElse { emptyList() }
-        buildShell()
-        showHome()
-    }
-
-    private fun requestPermissionsIfNeeded() {
-        val audio = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-        if (ContextCompat.checkSelfPermission(this, audio) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(audio), 7001)
-        }
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7002)
-        }
-    }
-
-    private fun buildShell() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(bg) }
-        root.addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
-        page = FrameLayout(this)
-        root.addView(page, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(buildMiniPlayer(), LinearLayout.LayoutParams(-1, dp(72)).apply { setMargins(dp(10), dp(6), dp(10), dp(5)) })
-        nav = buildNav()
-        root.addView(nav, LinearLayout.LayoutParams(-1, dp(66)).apply { setMargins(dp(8), 0, dp(8), dp(5)) })
-        setContentView(root)
-    }
-
-    private fun topBar(): LinearLayout = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(15), dp(8), dp(15), dp(3))
-        val brand = LinearLayout(this@ModernMusicActivity).apply { gravity = Gravity.CENTER_VERTICAL }
-        val logo = FrameLayout(this@ModernMusicActivity).apply { background = accentBox(12); addView(tv("S", 18f, Color.WHITE, true).apply { gravity = Gravity.CENTER }) }
-        brand.addView(logo, LinearLayout.LayoutParams(dp(36), dp(36)))
-        brand.addView(tv("Spotifusion", 18f, text, true).apply { setPadding(dp(10), 0, 0, 0) })
-        addView(brand, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(tv("⌕", 26f, text, true).apply { gravity = Gravity.CENTER; background = box(surface2, 16, true); setOnClickListener { showSearch() } }, LinearLayout.LayoutParams(dp(46), dp(46)).apply { rightMargin = dp(7) })
-        addView(tv("⋮", 25f, text, true).apply { gravity = Gravity.CENTER; background = box(surface2, 16, true); setOnClickListener { showSettings() } }, LinearLayout.LayoutParams(dp(46), dp(46)))
-    }
-
-    private fun buildNav(): LinearLayout = LinearLayout(this).apply {
-        gravity = Gravity.CENTER; background = box(surface, 22, true); setPadding(dp(4), dp(4), dp(4), dp(4))
-        val items = listOf("⌂" to "Home", "⌕" to "Search", "▣" to "Library", "≋" to "EQ")
-        items.forEachIndexed { i, item ->
-            val cell = LinearLayout(this@ModernMusicActivity).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true
-                setOnClickListener { tab = i; when (i) { 0 -> showHome(); 1 -> showSearch(); 2 -> showLibrary(); else -> showEqualizer() }; refreshNav() }
-            }
-            cell.addView(tv(item.first, 19f, if (i == tab) violet else muted, true).apply { gravity = Gravity.CENTER })
-            cell.addView(tv(item.second, 9f, if (i == tab) violet else muted, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(3), 0, 0) })
-            addView(cell, LinearLayout.LayoutParams(0, -1, 1f))
-        }
-    }
-
-    private fun refreshNav() {
-        for (i in 0 until nav.childCount) {
-            val c = nav.getChildAt(i) as LinearLayout
-            val active = i == tab
-            c.background = if (active) box(Color.rgb(31, 23, 55), 16) else null
-            (c.getChildAt(0) as TextView).setTextColor(if (active) violet else muted)
-            (c.getChildAt(1) as TextView).setTextColor(if (active) violet else muted)
-        }
-    }
-
-    private fun buildMiniPlayer(): LinearLayout = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL; background = box(surface, 18, true); setPadding(dp(8), dp(7), dp(8), dp(7))
-        val art = TextView(this@ModernMusicActivity).apply { text = "◉"; textSize = 23f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); background = accentBox(13) }
-        addView(art, LinearLayout.LayoutParams(dp(50), dp(50)))
-        val info = LinearLayout(this@ModernMusicActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(6), 0); setOnClickListener { showNowPlaying() } }
-        miniTitle = tv(PlaybackController.currentTitle().ifBlank { "Nothing playing" }, 12.5f, text, true)
-        miniArtist = tv(PlaybackController.currentArtist().ifBlank { "Choose a song" }, 10f, muted)
-        info.addView(miniTitle); info.addView(miniArtist.apply { setPadding(0, dp(4), 0, 0) })
-        addView(info, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(tv("♡", 22f, muted).apply { gravity = Gravity.CENTER; setOnClickListener { toast("Like state saved locally") } }, LinearLayout.LayoutParams(dp(40), dp(50)))
-        miniPlay = tv(if (PlaybackController.isPlaying()) "Ⅱ" else "▶", 18f, text, true).apply { gravity = Gravity.CENTER; setOnClickListener { PlaybackController.toggle(); refreshMini() } }
-        addView(miniPlay, LinearLayout.LayoutParams(dp(44), dp(50)))
-    }
-
-    private fun refreshMini() {
-        miniTitle.text = PlaybackController.currentTitle().ifBlank { "Nothing playing" }
-        miniArtist.text = PlaybackController.currentArtist().ifBlank { "Choose a song" }
-        miniPlay.text = if (PlaybackController.isPlaying()) "Ⅱ" else "▶"
-    }
-
-    private fun shell(content: LinearLayout): ScrollView = ScrollView(this).apply {
-        setBackgroundColor(bg); isFillViewport = true; addView(content, ViewGroup.LayoutParams(-1, -1))
-    }
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(28)) }
-    private fun show(v: View) { page.removeAllViews(); page.addView(v, FrameLayout.LayoutParams(-1, -1)) }
-    private fun heading(c: LinearLayout, title: String, action: String? = null, onAction: (() -> Unit)? = null) {
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(14), 0, dp(9)) }
-        row.addView(tv(title, 14f, text, true), LinearLayout.LayoutParams(0, -2, 1f))
-        if (action != null) row.addView(tv(action, 10f, violet, true).apply { setOnClickListener { onAction?.invoke() } })
-        c.addView(row)
-    }
-
-    private fun showHome() {
-        val c = column()
-        c.addView(tv("Good evening", 12f, muted))
-        c.addView(tv("Your sound. Your space.", 25f, text, true).apply { setPadding(0, dp(5), 0, dp(13)) })
-        val hero = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = accentBox(23); setPadding(dp(16), dp(15), dp(14), dp(15)) }
-        hero.addView(TextView(this).apply { text = "◉"; textSize = 50f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); background = box(Color.rgb(53, 35, 112), 18) }, LinearLayout.LayoutParams(dp(112), dp(112)))
-        val hi = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
-        hi.addView(tv("FEATURED", 9f, Color.WHITE, true)); hi.addView(tv("Glass Architecture", 18f, Color.WHITE, true).apply { setPadding(0, dp(7), 0, 0) }); hi.addView(tv("Astral Pulse", 11f, Color.rgb(224, 216, 255)).apply { setPadding(0, dp(5), 0, dp(11)) })
-        hi.addView(tv("  PLAY NOW  ", 10f, violet, true).apply { gravity = Gravity.CENTER; background = box(Color.WHITE, 14); setPadding(dp(4), dp(9), dp(4), dp(9)); setOnClickListener { playFirstOrDemo() } }, LinearLayout.LayoutParams(-2, dp(37)))
-        hero.addView(hi, LinearLayout.LayoutParams(0, -2, 1f)); c.addView(hero, LinearLayout.LayoutParams(-1, dp(142)))
-        heading(c, "Recently played", "See all")
-        if (tracks.isEmpty()) c.addView(emptyCard("No local music found yet", "Grant music access or add audio to the device."))
-        else tracks.take(8).forEach { addTrackRow(c, it) }
-        heading(c, "Quick actions")
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        quick(actions, "♥", "Liked") { showLibrary() }; quick(actions, "▤", "Playlists") { startActivity(Intent(this@ModernMusicActivity, PlaylistActivity::class.java)) }; quick(actions, "◷", "Timer") { sleepTimer() }
-        c.addView(actions, LinearLayout.LayoutParams(-1, dp(90)))
-        show(shell(c))
-    }
-
-    private fun quick(parent: LinearLayout, icon: String, title: String, action: () -> Unit) {
-        val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; background = box(surface, 16, true); setOnClickListener { action() } }
-        b.addView(tv(icon, 22f, violet, true).apply { gravity = Gravity.CENTER }); b.addView(tv(title, 9f, muted, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(5), 0, 0) })
-        parent.addView(b, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
-    }
-
-    private fun showSearch() {
-        val c = column(); c.addView(tv("Search", 26f, text, true).apply { setPadding(0, dp(4), 0, dp(12)) })
-        val input = EditText(this).apply { hint = "Songs, artists, albums"; setHintTextColor(muted); setTextColor(text); textSize = 14f; singleLine = true; background = box(surface2, 16, true); setPadding(dp(15), 0, dp(15), 0); setText(searchText) }
-        c.addView(input, LinearLayout.LayoutParams(-1, dp(52)))
-        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val update = { searchText = input.text.toString().trim(); results.removeAllViews(); tracks.filter { t -> searchText.isBlank() || listOf(t.title, t.artist, t.album).any { it.contains(searchText, true) } }.take(30).forEach { addTrackRow(results, it) } }
-        input.setOnEditorActionListener { _, _, _ -> update(); true }; input.addTextChangedListener(object : android.text.TextWatcher { override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) = Unit; override fun onTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) { update() }; override fun afterTextChanged(s: android.text.Editable?) = Unit })
-        c.addView(results); update(); show(shell(c))
-    }
-
-    private fun showLibrary() {
-        val c = column(); c.addView(tv("Library", 26f, text, true).apply { setPadding(0, dp(4), 0, dp(13)) })
-        libraryCard(c, "Local Music", "${tracks.size} tracks", "♫") { showLocalMusic() }
-        libraryCard(c, "Playlists", "Create and manage playlists", "▤") { startActivity(Intent(this, PlaylistActivity::class.java)) }
-        libraryCard(c, "Favorites", "Your liked tracks", "♥") { toast("Favorites are available from the player") }
-        libraryCard(c, "Recently Played", "Playback history", "◷") { showLocalMusic() }
-        show(shell(c))
-    }
-
-    private fun libraryCard(c: LinearLayout, title: String, sub: String, icon: String, action: () -> Unit) {
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; background = box(surface, 18, true); setPadding(dp(12), dp(11), dp(12), dp(11)); setOnClickListener { action() } }
-        row.addView(tv(icon, 24f, violet, true).apply { gravity = Gravity.CENTER; background = box(Color.rgb(29, 22, 48), 14) }, LinearLayout.LayoutParams(dp(50), dp(50)))
-        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }; info.addView(tv(title, 13f, text, true)); info.addView(tv(sub, 10f, muted).apply { setPadding(0, dp(5), 0, 0) }); row.addView(info, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(tv("›", 24f, muted), LinearLayout.LayoutParams(dp(25), -1)); c.addView(row, LinearLayout.LayoutParams(-1, dp(76)).apply { bottomMargin = dp(9) })
-    }
-
-    private fun showLocalMusic() {
-        tracks = runCatching { LocalMusicScanner.scan(this) }.getOrElse { emptyList() }
-        val c = column(); c.addView(tv("All songs", 25f, text, true).apply { setPadding(0, dp(4), 0, dp(10)) }); c.addView(tv("${tracks.size} tracks on this device", 10f, muted).apply { setPadding(0, 0, 0, dp(10)) }); tracks.forEach { addTrackRow(c, it) }; show(shell(c))
-    }
-
-    private fun addTrackRow(parent: LinearLayout, track: LocalTrack) {
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(7), dp(7), dp(7), dp(7)); background = box(surface, 15, true); setOnClickListener { playTrack(track) } }
-        row.addView(tv("◉", 22f, Color.WHITE, true).apply { gravity = Gravity.CENTER; background = accentBox(12) }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(11), 0, dp(5), 0) }; info.addView(tv(track.title, 12.5f, text, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }); info.addView(tv(track.artist, 10f, muted).apply { setPadding(0, dp(4), 0, 0) }); row.addView(info, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(tv("▶", 13f, violet, true)); parent.addView(row, LinearLayout.LayoutParams(-1, dp(64)).apply { bottomMargin = dp(6) })
-    }
-
-    private fun showNowPlaying() {
-        val c = column(); c.gravity = Gravity.CENTER_HORIZONTAL
-        c.addView(tv("NOW PLAYING", 10f, violet, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, dp(15)) })
-        c.addView(tv("◉", 100f, Color.WHITE, true).apply { gravity = Gravity.CENTER; background = accentBox(28) }, LinearLayout.LayoutParams(dp(250), dp(250)))
-        c.addView(tv(PlaybackController.currentTitle().ifBlank { "Nothing playing" }, 23f, text, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(20), 0, dp(5)) })
-        c.addView(tv(PlaybackController.currentArtist().ifBlank { "Select a track" }, 13f, muted).apply { gravity = Gravity.CENTER })
-        val seek = SeekBar(this).apply { max = 1000; progressTintList = android.content.res.ColorStateList.valueOf(violet); thumbTintList = android.content.res.ColorStateList.valueOf(violet); setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener { override fun onProgressChanged(b: SeekBar?, p: Int, from: Boolean) { if (from) PlaybackController.seek(PlaybackController.duration() * p / 1000L) }; override fun onStartTrackingTouch(b: SeekBar?) = Unit; override fun onStopTrackingTouch(b: SeekBar?) = Unit }) }
-        c.addView(seek, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(18) })
-        val controls = LinearLayout(this).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, 0) }
-        control(controls, "↶") { PlaybackController.previous() }; control(controls, if (PlaybackController.isPlaying()) "Ⅱ" else "▶", true) { PlaybackController.toggle() }; control(controls, "↷") { PlaybackController.next() }; control(controls, if (PlaybackController.isShuffleEnabled()) "⌘" else "⇄") { PlaybackController.setShuffle(!PlaybackController.isShuffleEnabled()) }; control(controls, if (PlaybackController.isRepeatEnabled()) "1↻" else "↻") { PlaybackController.setRepeat(!PlaybackController.isRepeatEnabled()) }
-        c.addView(controls, LinearLayout.LayoutParams(-1, dp(74)))
-        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER }; actionChip(actions, "Lyrics") { startActivity(Intent(this@ModernMusicActivity, LyricsActivity::class.java)) }; actionChip(actions, "Timer") { sleepTimer() }; actionChip(actions, "Queue") { showLocalMusic() }
-        c.addView(actions, LinearLayout.LayoutParams(-1, dp(58))); show(shell(c)); startProgressTicker(seek)
-    }
-
-    private fun control(parent: LinearLayout, icon: String, primary: Boolean = false, action: () -> Unit) { val b = tv(icon, if (primary) 25f else 19f, if (primary) Color.WHITE else muted, true).apply { gravity = Gravity.CENTER; background = if (primary) accentBox(30) else box(surface2, 25); setOnClickListener { action() } }; parent.addView(b, LinearLayout.LayoutParams(if (primary) dp(64) else dp(52), dp(56)).apply { setMargins(dp(4), 0, dp(4), 0) }) }
-    private fun actionChip(parent: LinearLayout, title: String, action: () -> Unit) { parent.addView(tv(title, 10f, muted, true).apply { gravity = Gravity.CENTER; background = box(surface2, 14, true); setPadding(dp(13), dp(9), dp(13), dp(9)); setOnClickListener { action() } }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { setMargins(dp(3), 0, dp(3), 0) }) }
-
-    private fun startProgressTicker(seek: SeekBar) { val r = object : Runnable { override fun run() { val d = PlaybackController.duration(); if (d > 0 && !seek.isPressed) seek.progress = (PlaybackController.position() * 1000L / d).toInt().coerceIn(0, 1000); refreshMini(); uiHandler.postDelayed(this, 500) } }; seek.tag = r; uiHandler.post(r) }
-
-    private fun showEqualizer() {
-        val c = column(); c.addView(tv("Equalizer", 26f, text, true).apply { setPadding(0, dp(4), 0, dp(8)) }); c.addView(tv("Tune the sound for your headphones or speakers.", 11f, muted).apply { setPadding(0, 0, 0, dp(18)) })
-        val bands = listOf("60 Hz", "230 Hz", "910 Hz", "3.6 kHz", "14 kHz")
-        bands.forEachIndexed { i, band ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = box(surface, 16, true); setPadding(dp(12), dp(9), dp(12), dp(8)) }; val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }; head.addView(tv(band, 11f, text, true), LinearLayout.LayoutParams(0, -2, 1f)); head.addView(tv("0 dB", 10f, violet, true)); row.addView(head); row.addView(SeekBar(this).apply { max = 24; progress = 12; progressTintList = android.content.res.ColorStateList.valueOf(violet); thumbTintList = android.content.res.ColorStateList.valueOf(violet) }); c.addView(row, LinearLayout.LayoutParams(-1, dp(78)).apply { bottomMargin = dp(8) })
-        }
-        heading(c, "Presets"); listOf("Flat", "Bass Boost", "Vocal", "Treble", "Night").forEach { preset -> c.addView(tv(preset, 12f, if (preset == "Bass Boost") violet else text, true).apply { gravity = Gravity.CENTER_VERTICAL; background = box(surface, 14, true); setPadding(dp(14), 0, dp(14), 0); setOnClickListener { toast("Preset: $preset") } }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) }) }; show(shell(c))
-    }
-
-    private fun showSettings() {
-        val c = column(); c.addView(tv("Settings", 26f, text, true).apply { setPadding(0, dp(4), 0, dp(15)) })
-        setting(c, "Playback", "Shuffle, repeat and volume controls are available in the player") { showNowPlaying() }
-        setting(c, "Sleep timer", "Stop playback automatically") { sleepTimer() }
-        setting(c, "Lyrics", "Open synchronized lyrics") { startActivity(Intent(this, LyricsActivity::class.java)) }
-        setting(c, "Playlists", "Create and manage playlists") { startActivity(Intent(this, PlaylistActivity::class.java)) }
-        setting(c, "Music library", "Rescan audio stored on this device") { tracks = LocalMusicScanner.scan(this); toast("Found ${tracks.size} tracks"); showLibrary() }
-        setting(c, "About Spotifusion", "AMOLED edition · Media3 background playback") { toast("Spotifusion") }
-        show(shell(c))
-    }
-
-    private fun setting(c: LinearLayout, title: String, sub: String, action: () -> Unit) { val r = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = box(surface, 17, true); setPadding(dp(14), dp(11), dp(14), dp(11)); setOnClickListener { action() } }; r.addView(tv(title, 12.5f, text, true)); r.addView(tv(sub, 9.5f, muted).apply { setPadding(0, dp(5), 0, 0) }); c.addView(r, LinearLayout.LayoutParams(-1, dp(70)).apply { bottomMargin = dp(8) }) }
-
-    private fun emptyCard(title: String, sub: String) = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = box(surface, 18, true); setPadding(dp(16), dp(18), dp(16), dp(18)); addView(tv(title, 13f, text, true)); addView(tv(sub, 10f, muted).apply { setPadding(0, dp(6), 0, 0) }) }
-
-    private fun playFirstOrDemo() { if (tracks.isNotEmpty()) playTrack(tracks.first()) else toast("Add music to this device first") }
-    private fun playTrack(track: LocalTrack) { PlaybackController.play(track.uri.toString(), track.title, track.artist, track.album, track.id.toString()); refreshMini(); showNowPlaying() }
-
-    private fun sleepTimer() {
-        val choices = arrayOf("15 minutes", "30 minutes", "45 minutes", "60 minutes", "Cancel timer")
-        AlertDialog.Builder(this).setTitle("Sleep timer").setItems(choices) { _, which ->
-            sleepTask?.let { sleepHandler?.removeCallbacks(it) }
-            if (which == 4) { toast("Timer cancelled"); return@setItems }
-            val mins = listOf(15L, 30L, 45L, 60L)[which]
-            val h = Handler(Looper.getMainLooper()); sleepHandler = h
-            val task = Runnable { PlaybackController.pause(); toast("Sleep timer finished") }; sleepTask = task; h.postDelayed(task, mins * 60_000L); toast("Timer set for $mins minutes")
-        }.show()
-    }
-
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
-
-    private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) { refreshMini() }
-        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) { refreshMini() }
-    }
-    override fun onStart() { super.onStart(); PlaybackController.addListener(playerListener); refreshMini() }
-    override fun onStop() { PlaybackController.removeListener(playerListener); super.onStop() }
-    override fun onDestroy() { sleepTask?.let { sleepHandler?.removeCallbacks(it) }; PlaybackController.disconnect(); super.onDestroy() }
+    private val bg=Color.rgb(7,7,12); private val card=Color.rgb(16,16,24); private val card2=Color.rgb(23,22,32)
+    private val border=Color.rgb(43,40,58); private val white=Color.rgb(245,243,252); private val muted=Color.rgb(151,146,166)
+    private val violet=Color.rgb(123,81,251); private val violetDark=Color.rgb(55,34,112)
+    private lateinit var page: FrameLayout; private lateinit var miniTitle: TextView; private lateinit var miniArtist: TextView; private lateinit var miniPlay: TextView; private lateinit var nav: LinearLayout
+    private var tracks=listOf<LocalTrack>(); private var tab=0; private var query=""; private lateinit var musicStore: UserMusicStore; private lateinit var playlistStore: PlaylistStore
+    private val ui=Handler(Looper.getMainLooper()); private var timer: Runnable?=null
+    private fun dp(v:Int)= (v*resources.displayMetrics.density+.5f).toInt()
+    private fun label(s:String,size:Float,color:Int=white,bold:Boolean=false)=TextView(this).apply{text=s;textSize=size;setTextColor(color);includeFontPadding=false;if(bold)typeface=Typeface.DEFAULT_BOLD}
+    private fun bg(c:Int=card,r:Int=18,stroke:Boolean=false)=android.graphics.drawable.GradientDrawable().apply{setColor(c);cornerRadius=dp(r).toFloat();if(stroke)setStroke(dp(1),border)}
+    private fun accent(r:Int=18)=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,intArrayOf(violetDark,violet)).apply{cornerRadius=dp(r).toFloat()}
+    override fun onCreate(b:Bundle?){super.onCreate(b);window.statusBarColor=bg;window.navigationBarColor=bg;musicStore=UserMusicStore(this);playlistStore=PlaylistStore(this);requestMediaPermission();PlaybackController.connect(this);scan();shell();home()}
+    private fun requestMediaPermission(){val p=if(Build.VERSION.SDK_INT>=33)Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE;if(ContextCompat.checkSelfPermission(this,p)!=PackageManager.PERMISSION_GRANTED)ActivityCompat.requestPermissions(this,arrayOf(p),7001)}
+    private fun scan(){tracks=runCatching{LocalMusicScanner.scan(this)}.getOrElse{emptyList()}}
+    private fun shell(){val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(bg)};root.addView(top(),LinearLayout.LayoutParams(-1,dp(60)));page=FrameLayout(this);root.addView(page,LinearLayout.LayoutParams(-1,0,1f));root.addView(mini(),LinearLayout.LayoutParams(-1,dp(70)).apply{setMargins(dp(9),dp(5),dp(9),dp(5))});nav=bottomNav();root.addView(nav,LinearLayout.LayoutParams(-1,dp(64)).apply{setMargins(dp(8),0,dp(8),dp(5))});setContentView(root)}
+    private fun top()=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(15),dp(7),dp(15),dp(4));addView(label("S",18f,Color.WHITE,true).apply{gravity=Gravity.CENTER;background=accent(11)},LinearLayout.LayoutParams(dp(36),dp(36)));addView(label("Spotifusion",18f,white,true).apply{setPadding(dp(10),0,0,0)},LinearLayout.LayoutParams(0,-1,1f));addView(label("⌕",25f,white,true).apply{gravity=Gravity.CENTER;background=bg(card2,15,true);setOnClickListener{search()}},LinearLayout.LayoutParams(dp(44),dp(44)).apply{rightMargin=dp(7)});addView(label("⋮",24f,white,true).apply{gravity=Gravity.CENTER;background=bg(card2,15,true);setOnClickListener{settings()}},LinearLayout.LayoutParams(dp(44),dp(44)))}
+    private fun bottomNav()=LinearLayout(this).apply{gravity=Gravity.CENTER;background=bg(card,21,true);setPadding(dp(3),dp(3),dp(3),dp(3));listOf("⌂" to "Home","⌕" to "Search","▣" to "Library","≋" to "EQ").forEachIndexed{i,x->val v=LinearLayout(this@ModernMusicActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setOnClickListener{tab=i;when(i){0->home();1->search();2->library();3->equalizer()};refreshNav()}};v.addView(label(x.first,18f,if(i==tab)violet else muted,true).apply{gravity=Gravity.CENTER});v.addView(label(x.second,9f,if(i==tab)violet else muted,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(3),0,0)});addView(v,LinearLayout.LayoutParams(0,-1,1f))}}
+    private fun refreshNav(){for(i in 0 until nav.childCount){val v=nav.getChildAt(i) as LinearLayout;val on=i==tab;v.background=if(on)bg(violetDark,15)else null;(v.getChildAt(0)as TextView).setTextColor(if(on)violet else muted);(v.getChildAt(1)as TextView).setTextColor(if(on)violet else muted)}}
+    private fun mini()=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;background=bg(card,17,true);setPadding(dp(7),dp(6),dp(7),dp(6));addView(label("◉",22f,Color.WHITE,true).apply{gravity=Gravity.CENTER;background=accent(12)},LinearLayout.LayoutParams(dp(48),dp(48)));val info=LinearLayout(this@ModernMusicActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(10),0,dp(5),0);setOnClickListener{nowPlaying()}};miniTitle=label(PlaybackController.currentTitle().ifBlank{"Nothing playing"},12.5f,white,true);miniArtist=label(PlaybackController.currentArtist().ifBlank{"Choose a song"},10f,muted);info.addView(miniTitle);info.addView(miniArtist.apply{setPadding(0,dp(4),0,0)});addView(info,LinearLayout.LayoutParams(0,-1,1f));addView(label("♡",22f,muted).apply{gravity=Gravity.CENTER;setOnClickListener{toggleCurrentFavorite()}},LinearLayout.LayoutParams(dp(40),dp(48)));miniPlay=label(if(PlaybackController.isPlaying())"Ⅱ" else "▶",18f,white,true).apply{gravity=Gravity.CENTER;setOnClickListener{PlaybackController.toggle();refreshMini()}};addView(miniPlay,LinearLayout.LayoutParams(dp(44),dp(48)))}
+    private fun refreshMini(){if(!::miniTitle.isInitialized)return;miniTitle.text=PlaybackController.currentTitle().ifBlank{"Nothing playing"};miniArtist.text=PlaybackController.currentArtist().ifBlank{"Choose a song"};miniPlay.text=if(PlaybackController.isPlaying())"Ⅱ" else "▶"}
+    private fun container()=ScrollView(this).apply{setBackgroundColor(bg);isFillViewport=true}
+    private fun column()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(7),dp(14),dp(28))}
+    private fun show(c:LinearLayout){val s=container();s.addView(c,ScrollView.LayoutParams(-1,-1));page.removeAllViews();page.addView(s,FrameLayout.LayoutParams(-1,-1))}
+    private fun heading(c:LinearLayout,t:String){c.addView(label(t,14f,white,true).apply{setPadding(0,dp(15),0,dp(9))})}
+    private fun home(){tab=0;val c=column();c.addView(label("Good evening",11f,muted));c.addView(label("Your sound. Your space.",25f,white,true).apply{setPadding(0,dp(5),0,dp(14))});val hero=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;background=accent(22);setPadding(dp(15),dp(14),dp(12),dp(14))};hero.addView(label("◉",52f,Color.WHITE,true).apply{gravity=Gravity.CENTER;background=bg(Color.rgb(53,35,112),17)},LinearLayout.LayoutParams(dp(108),dp(108)));val hi=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(13),0,0,0)};hi.addView(label("YOUR LIBRARY",9f,Color.WHITE,true));hi.addView(label(if(tracks.isEmpty())"Add your music" else tracks.first().title,17f,Color.WHITE,true).apply{setPadding(0,dp(7),0,dp(4));maxLines=1});hi.addView(label(if(tracks.isEmpty())"Local music on this device" else tracks.first().artist,10f,Color.rgb(224,216,255)).apply{setPadding(0,0,0,dp(10))});hi.addView(label("  PLAY NOW  ",10f,violet,true).apply{gravity=Gravity.CENTER;background=bg(Color.WHITE,14);setPadding(dp(5),dp(8),dp(5),dp(8));setOnClickListener{if(tracks.isNotEmpty())playTrack(tracks.first())}});hero.addView(hi,LinearLayout.LayoutParams(0,-2,1f));c.addView(hero,LinearLayout.LayoutParams(-1,dp(136)));heading(c,"Recently played");val recent=musicStore.recentlyPlayed();if(recent.isEmpty()&&tracks.isEmpty())empty(c,"No music found","Allow audio access and keep music on the device.");else(recent.ifEmpty{tracks}).take(10).forEach{row(c,it)};heading(c,"Quick actions");val q=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL};quick(q,"♥","Liked"){favorites()};quick(q,"▤","Playlists"){playlists()};quick(q,"◷","Timer"){sleepTimer()};c.addView(q,LinearLayout.LayoutParams(-1,dp(84)));show(c);refreshNav()}
+    private fun quick(p:LinearLayout,i:String,t:String,a:()->Unit){val v=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;background=bg(card,15,true);setOnClickListener{a()}};v.addView(label(i,21f,violet,true).apply{gravity=Gravity.CENTER});v.addView(label(t,9f,muted,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(4),0,0)});p.addView(v,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(3),0,dp(3),0)})}
+    private fun row(p:LinearLayout,t:LocalTrack){val r=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;background=bg(card,14,true);setPadding(dp(7),dp(6),dp(7),dp(6));setOnClickListener{playTrack(t)}};r.addView(label("◉",20f,Color.WHITE,true).apply{gravity=Gravity.CENTER;background=accent(11)},LinearLayout.LayoutParams(dp(46),dp(46)));val info=LinearLayout(this@ModernMusicActivity).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(10),0,dp(5),0)};info.addView(label(t.title,12f,white,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END});info.addView(label(t.artist,9.5f,muted).apply{setPadding(0,dp(4),0,0)});r.addView(info,LinearLayout.LayoutParams(0,-2,1f));r.addView(label("▶",12f,violet,true));p.addView(r,LinearLayout.LayoutParams(-1,dp(62)).apply{bottomMargin=dp(6)})}
+    private fun search(){tab=1;val c=column();c.addView(label("Search",26f,white,true).apply{setPadding(0,dp(5),0,dp(12))});val e=EditText(this).apply{hint="Songs, artists, albums";setHintTextColor(muted);setTextColor(white);textSize=14f;setSingleLine(true);background=bg(card2,16,true);setPadding(dp(14),0,dp(14),0);setText(query)};c.addView(e,LinearLayout.LayoutParams(-1,dp(52)));val results=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};fun update(){query=e.text.toString().trim();results.removeAllViews();tracks.filter{query.isBlank()||it.title.contains(query,true)||it.artist.contains(query,true)||it.album.contains(query,true)}.forEach{row(results,it)}};e.addTextChangedListener{update()};c.addView(results);update();show(c);refreshNav()}
+    private fun library(){tab=2;val c=column();c.addView(label("Library",26f,white,true).apply{setPadding(0,dp(5),0,dp(13))});cardButton(c,"Local Music","${tracks.size} tracks","♫"){localMusic()};cardButton(c,"Favorites","${musicStore.favoriteIds().size} liked tracks","♥"){favorites()};cardButton(c,"Playlists","${playlistStore.all().size} playlists","▤"){playlists()};cardButton(c,"Recently Played","${musicStore.recentlyPlayed().size} tracks","◷"){recent()};show(c);refreshNav()}
+    private fun cardButton(c:LinearLayout,t:String,s:String,i:String,a:()->Unit){val r=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;background=bg(card,17,true);setPadding(dp(12),dp(10),dp(12),dp(10));setOnClickListener{a()}};r.addView(label(i,23f,violet,true).apply{gravity=Gravity.CENTER;background=bg(Color.rgb(29,22,48),13)},LinearLayout.LayoutParams(dp(48),dp(48)));val x=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(11),0,0,0)};x.addView(label(t,12.5f,white,true));x.addView(label(s,9.5f,muted).apply{setPadding(0,dp(5),0,0)});r.addView(x,LinearLayout.LayoutParams(0,-2,1f));r.addView(label("›",23f,muted));c.addView(r,LinearLayout.LayoutParams(-1,dp(72)).apply{bottomMargin=dp(8)})}
+    private fun localMusic(){scan();val c=column();c.addView(label("All songs",25f,white,true));c.addView(label("${tracks.size} tracks on this device",10f,muted).apply{setPadding(0,dp(4),0,dp(10))});tracks.forEach{row(c,it)};show(c)}
+    private fun favorites(){val ids=musicStore.favoriteIds();val list=tracks.filter{it.id in ids};val c=column();c.addView(label("Liked songs",25f,white,true));c.addView(label("${list.size} favorites",10f,muted).apply{setPadding(0,dp(4),0,dp(12))});if(list.isEmpty())empty(c,"No favorites yet","Tap the heart on the player to save a song.");list.forEach{row(c,it)};show(c)}
+    private fun recent(){val c=column();c.addView(label("Recently played",25f,white,true));musicStore.recentlyPlayed().forEach{row(c,it)};show(c)}
+    private fun playlists(){val c=column();c.addView(label("Playlists",25f,white,true));c.addView(label("+ Create playlist",12f,violet,true).apply{gravity=Gravity.CENTER_VERTICAL;background=bg(card2,15,true);setPadding(dp(14),0,dp(14),0);setOnClickListener{createPlaylist()}},LinearLayout.LayoutParams(-1,dp(48)).apply{bottomMargin=dp(10)});playlistStore.all().forEach{p->cardButton(c,p.name,"${p.trackIds.size} tracks","▤"){playlist(p.id)}};show(c)}
+    private fun createPlaylist(){val e=EditText(this).apply{hint="Playlist name";setTextColor(white);setHintTextColor(muted);setSingleLine(true)};android.app.AlertDialog.Builder(this).setTitle("New playlist").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Create"){_,_->if(playlistStore.create(e.text.toString())==null)toast("Name already exists or is empty") else playlists()}.show()}
+    private fun playlist(id:String){val p=playlistStore.all().firstOrNull{it.id==id}?:return;val list=tracks.filter{it.id in p.trackIds};val c=column();c.addView(label(p.name,25f,white,true));c.addView(label("${list.size} tracks",10f,muted).apply{setPadding(0,dp(4),0,dp(12))});if(list.isEmpty())empty(c,"Playlist is empty","Use Add to playlist from a song.");list.forEach{row(c,it)};show(c)}
+    private fun nowPlaying(){val c=column();c.gravity=Gravity.CENTER_HORIZONTAL;c.addView(label("NOW PLAYING",10f,violet,true));c.addView(label("◉",96f,Color.WHITE,true).apply{gravity=Gravity.CENTER;background=accent(26)},LinearLayout.LayoutParams(dp(250),dp(250)));c.addView(label(PlaybackController.currentTitle().ifBlank{"Nothing playing"},22f,white,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(18),0,dp(4))});c.addView(label(PlaybackController.currentArtist().ifBlank{"Select a track"},12f,muted));val seek=SeekBar(this).apply{max=1000;progressTintList=android.content.res.ColorStateList.valueOf(violet);setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(b:SeekBar?,p:Int,from:Boolean){if(from)PlaybackController.seek(PlaybackController.duration()*p/1000)};override fun onStartTrackingTouch(b:SeekBar?){};override fun onStopTrackingTouch(b:SeekBar?){} })};c.addView(seek,LinearLayout.LayoutParams(-1,dp(45)).apply{topMargin=dp(18)});val ctl=LinearLayout(this).apply{gravity=Gravity.CENTER};button(ctl,"↶"){PlaybackController.previous()};button(ctl,if(PlaybackController.isPlaying())"Ⅱ" else "▶",true){PlaybackController.toggle();refreshMini()};button(ctl,"↷"){PlaybackController.next()};button(ctl,if(PlaybackController.isShuffleEnabled())"⌘" else "⇄"){PlaybackController.setShuffle(!PlaybackController.isShuffleEnabled())};button(ctl,if(PlaybackController.isRepeatEnabled())"1↻" else "↻"){PlaybackController.setRepeat(!PlaybackController.isRepeatEnabled())};c.addView(ctl,LinearLayout.LayoutParams(-1,dp(68)));val actions=LinearLayout(this).apply{gravity=Gravity.CENTER};chip(actions,"Lyrics"){startActivity(android.content.Intent(this@ModernMusicActivity,LyricsActivity::class.java))};chip(actions,"Timer"){sleepTimer()};chip(actions,"Favorite"){toggleCurrentFavorite()};c.addView(actions,LinearLayout.LayoutParams(-1,dp(48)));show(c);startSeekTicker(seek)}
+    private fun button(p:LinearLayout,s:String,primary:Boolean=false,a:()->Unit){p.addView(label(s,if(primary)24f else 18f,if(primary)white else muted,true).apply{gravity=Gravity.CENTER;background=if(primary)accent(28) else bg(card2,25);setOnClickListener{a()}},LinearLayout.LayoutParams(if(primary)62 else 50,dp(54)).apply{setMargins(dp(3),0,dp(3),0)})}
+    private fun chip(p:LinearLayout,s:String,a:()->Unit){p.addView(label(s,10f,muted,true).apply{gravity=Gravity.CENTER;background=bg(card2,13,true);setOnClickListener{a()}},LinearLayout.LayoutParams(0,dp(40),1f).apply{setMargins(dp(3),0,dp(3),0)})}
+    private fun startSeekTicker(s:SeekBar){val r=object:Runnable{override fun run(){val d=PlaybackController.duration();if(d>0&&!s.isPressed)s.progress=(PlaybackController.position()*1000/d).toInt().coerceIn(0,1000);refreshMini();ui.postDelayed(this,500)}};ui.post(r)}
+    private fun equalizer(){tab=3;val c=column();c.addView(label("Equalizer",26f,white,true));c.addView(label("Five-band sound controls",11f,muted).apply{setPadding(0,dp(4),0,dp(15))});listOf("60 Hz","230 Hz","910 Hz","3.6 kHz","14 kHz").forEach{b->val r=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=bg(card,15,true);setPadding(dp(12),dp(8),dp(12),dp(7))};r.addView(label(b,11f,white,true));r.addView(SeekBar(this).apply{max=24;progress=12;progressTintList=android.content.res.ColorStateList.valueOf(violet)});c.addView(r,LinearLayout.LayoutParams(-1,dp(72)).apply{bottomMargin=dp(7)})};heading(c,"Presets");listOf("Flat","Bass Boost","Vocal","Treble","Night").forEach{p->c.addView(label(p,12f,if(p=="Flat")violet else white,true).apply{gravity=Gravity.CENTER_VERTICAL;background=bg(card,14,true);setPadding(dp(14),0,dp(14),0);setOnClickListener{toast("$p preset selected")}},LinearLayout.LayoutParams(-1,dp(46)).apply{bottomMargin=dp(6)})};show(c);refreshNav()}
+    private fun settings(){val c=column();c.addView(label("Settings",26f,white,true));cardButton(c,"Music library","Rescan device audio","♫"){scan();toast("Found ${tracks.size} tracks")};cardButton(c,"Playlists","Manage local playlists","▤"){playlists()};cardButton(c,"Lyrics","Open current-song lyrics","≋"){startActivity(android.content.Intent(this,LyricsActivity::class.java))};cardButton(c,"Sleep timer","Stop playback automatically","◷"){sleepTimer()};cardButton(c,"About Spotifusion","AMOLED edition · Media3","S"){toast("Spotifusion")};show(c)}
+    private fun sleepTimer(){val choices=arrayOf("15 minutes","30 minutes","45 minutes","60 minutes","Cancel timer");android.app.AlertDialog.Builder(this).setTitle("Sleep timer").setItems(choices){_,i->timer?.let{ui.removeCallbacks(it)};if(i==4){toast("Timer cancelled");return@setItems};val ms=TimeUnit.MINUTES.toMillis(listOf(15L,30L,45L,60L)[i]);timer=Runnable{PlaybackController.pause();toast("Sleep timer finished")};ui.postDelayed(timer!!,ms);toast("Timer set")}.show()}
+    private fun playTrack(t:LocalTrack){musicStore.addRecentlyPlayed(t);PlaybackController.play(t.uri.toString(),t.title,t.artist,t.album,t.id.toString());refreshMini();nowPlaying()}
+    private fun toggleCurrentFavorite(){val id=PlaybackController.currentMediaId()?.toLongOrNull()?:return;val liked=musicStore.toggleFavorite(id);toast(if(liked)"Added to favorites" else "Removed from favorites")}
+    private fun empty(c:LinearLayout,t:String,s:String){c.addView(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=bg(card,17,true);setPadding(dp(16),dp(18),dp(16),dp(18));addView(label(t,13f,white,true));addView(label(s,10f,muted).apply{setPadding(0,dp(6),0,0)})})}
+    private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_SHORT).show()
+    private val listener=object:Player.Listener{override fun onIsPlayingChanged(v:Boolean){refreshMini()};override fun onMediaItemTransition(m:androidx.media3.common.MediaItem?,r:Int){refreshMini()}}
+    override fun onStart(){super.onStart();PlaybackController.addListener(listener);refreshMini()}
+    override fun onStop(){PlaybackController.removeListener(listener);super.onStop()}
+    override fun onDestroy(){timer?.let{ui.removeCallbacks(it)};PlaybackController.disconnect();super.onDestroy()}
 }
