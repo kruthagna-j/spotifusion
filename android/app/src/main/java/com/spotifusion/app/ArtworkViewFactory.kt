@@ -1,25 +1,28 @@
 package com.spotifusion.app
 
+import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
-import android.content.Context
 
-/** Creates a lightweight artwork view with a deterministic fallback. */
+/** Creates lightweight artwork using real device album art with a violet fallback. */
 object ArtworkViewFactory {
     fun create(context: Context, track: LocalTrack?, sizePx: Int): FrameLayout {
         val box = FrameLayout(context)
         box.background = GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.rgb(91, 73, 226), Color.rgb(60, 178, 235))
+            intArrayOf(Color.rgb(47, 29, 99), Color.rgb(123, 81, 251))
         ).apply { cornerRadius = 18f }
+        box.clipToOutline = true
+        box.outlineProvider = ViewOutlineProvider.BACKGROUND
 
         val fallback = TextView(context).apply {
-            text = "◉"
-            textSize = 24f
+            text = "♪"
+            textSize = if (sizePx >= 180) 52f else 23f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
         }
@@ -33,8 +36,6 @@ object ArtworkViewFactory {
                         val image = ImageView(context).apply {
                             setImageBitmap(bitmap)
                             scaleType = ImageView.ScaleType.CENTER_CROP
-                            clipToOutline = true
-                            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                         }
                         box.addView(image, FrameLayout.LayoutParams(-1, -1))
                     }
