@@ -1,12 +1,14 @@
 package com.spotifusion.app
 
-import android.app.AlertDialog
 import android.widget.EditText
 import android.text.Editable
 import android.text.TextWatcher
 
-typealias ModernAlertDialog = AlertDialog
-typealias AlertDialogCompat = AlertDialog
+typealias AlertDialog = android.app.AlertDialog
+
+typealias ModernAlertDialog = android.app.AlertDialog
+
+typealias AlertDialogCompat = android.app.AlertDialog
 
 fun EditText.addTextChangedListener(callback: (Editable?) -> Unit) {
     addTextChangedListener(object : TextWatcher {
