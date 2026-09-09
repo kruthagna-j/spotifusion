@@ -1,14 +1,25 @@
 package com.spotifusion.app
 
-import android.widget.EditText
+import android.content.Context
+import android.graphics.Color
 import android.text.Editable
 import android.text.TextWatcher
+import android.widget.EditText
+import android.widget.TextView
 
-typealias AlertDialog = android.app.AlertDialog
+/** Compatibility helpers used by the programmatic modern Android UI. */
+object AlertDialog {
+    fun Builder(context: Context): android.app.AlertDialog.Builder =
+        android.app.AlertDialog.Builder(context)
+}
 
-typealias ModernAlertDialog = android.app.AlertDialog
+var EditText.singleLine: Boolean
+    get() = isSingleLine
+    set(value) = setSingleLine(value)
 
-typealias AlertDialogCompat = android.app.AlertDialog
+fun TextView.setTextColor(value: Editable?) {
+    setTextColor(Color.WHITE)
+}
 
 fun EditText.addTextChangedListener(callback: (Editable?) -> Unit) {
     addTextChangedListener(object : TextWatcher {
