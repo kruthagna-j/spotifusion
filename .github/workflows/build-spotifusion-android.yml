@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          if [ -f "android/settings.gradle.kts" ]; then
+          if [ -f "android/settings.gradle" ] || [ -f "android/settings.gradle.kts" ]; then
             echo "Using android/ project directory"
           elif [ -f "Spotifusion_Android_WarmLight_FirebaseFixed_Final.zip" ]; then
             rm -rf android
