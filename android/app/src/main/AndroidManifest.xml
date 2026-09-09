@@ -20,8 +20,9 @@
         android:theme="@style/Theme.Spotifusion">
         <activity android:name=".PlaylistActivity" android:exported="false" />
         <activity android:name=".LyricsActivity" android:exported="false" />
+        <activity android:name=".MainActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity
-            android:name=".MainActivity"
+            android:name=".ModernMusicActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
