@@ -258,10 +258,21 @@ fun SpotiFusionApp(viewModel: MusicViewModel) {
       )
 
       if (isSettingsOpen) SettingsSheet(
-        settings = settingsState, onUpdateAudioQuality = viewModel::updateAudioQuality, onUpdateCrossfade = viewModel::updateCrossfade,
-        onToggleShakeToSkip = viewModel::toggleShakeToSkip, onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
-        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps, onToggleNotifications = { enabled -> viewModel.toggleNotifications(enabled); if (enabled && android.os.Build.VERSION.SDK_INT >=[...]
-        onToggleDarkTheme = viewModel::setDarkTheme, onClearCache = viewModel::clearCache, onDismiss = { viewModel.setSettingsOpen(false) }
+        settings = settingsState,
+        onUpdateAudioQuality = viewModel::updateAudioQuality,
+        onUpdateCrossfade = viewModel::updateCrossfade,
+        onToggleShakeToSkip = viewModel::toggleShakeToSkip,
+        onToggleLyricsAutoScroll = viewModel::toggleLyricsAutoScroll,
+        onToggleVisualizer60fps = viewModel::toggleVisualizer60fps,
+        onToggleNotifications = { enabled ->
+          viewModel.toggleNotifications(enabled)
+          if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            activity?.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+          }
+        },
+        onToggleDarkTheme = viewModel::setDarkTheme,
+        onClearCache = viewModel::clearCache,
+        onDismiss = { viewModel.setSettingsOpen(false) }
       )
 
       if (isSleepTimerOpen) SleepTimerDialog(sleepTimerMinutes, sleepTimerRemainingSec, viewModel::setSleepTimer) { viewModel.setSleepTimerOpen(false) }
