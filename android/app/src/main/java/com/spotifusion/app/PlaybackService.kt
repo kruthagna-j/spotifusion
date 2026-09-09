@@ -17,55 +17,26 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val attributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
+        val attributes = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build()
         player = ExoPlayer.Builder(this).build().apply {
             setAudioAttributes(attributes, true)
             setHandleAudioBecomingNoisy(true)
             repeatMode = Player.REPEAT_MODE_OFF
         }
-        val intent = Intent(this, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(pending)
-            .build()
+        val intent = Intent(this, ModernMusicActivity::class.java)
+        val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        mediaSession = MediaSession.Builder(this, player).setSessionActivity(pending).build()
     }
 
     fun playUri(uri: String, title: String, artist: String, album: String = "") {
-        val item = MediaItem.Builder()
-            .setUri(uri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .setAlbumTitle(album)
-                    .build()
-            )
-            .build()
-        player.setMediaItem(item)
-        player.prepare()
-        player.play()
+        player.setMediaItem(MediaItem.Builder().setUri(uri).setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).build()).build())
+        player.prepare(); player.play()
     }
 
     fun playTracks(tracks: List<LocalTrack>, startIndex: Int = 0) {
-        player.setMediaItems(tracks.map { track ->
-            MediaItem.Builder()
-                .setUri(track.uri)
-                .setMediaId(track.id.toString())
-                .setMediaMetadata(MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artist)
-                    .setAlbumTitle(track.album)
-                    .build())
-                .build()
-        }, startIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0)), 0L)
-        player.prepare()
-        player.play()
+        if (tracks.isEmpty()) return
+        player.setMediaItems(tracks.map { track -> MediaItem.Builder().setUri(track.uri).setMediaId(track.id.toString()).setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setAlbumTitle(track.album).build()).build() }, startIndex.coerceIn(0, tracks.lastIndex), 0L)
+        player.prepare(); player.play()
     }
 
     fun togglePlayPause() { if (player.isPlaying) player.pause() else player.play() }
@@ -77,15 +48,6 @@ class PlaybackService : MediaSessionService() {
     fun setRepeat(enabled: Boolean) { player.repeatMode = if (enabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = mediaSession
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!player.isPlaying) stopSelf()
-        super.onTaskRemoved(rootIntent)
-    }
-
-    override fun onDestroy() {
-        mediaSession.release()
-        player.release()
-        super.onDestroy()
-    }
+    override fun onTaskRemoved(rootIntent: Intent?) { if (!player.isPlaying) stopSelf(); super.onTaskRemoved(rootIntent) }
+    override fun onDestroy() { mediaSession.release(); player.release(); super.onDestroy() }
 }
