@@ -7,7 +7,13 @@ import { useLocalSongs } from '@/lib/localMusicDb'
 import { usePlayer } from '@/context/PlayerContext'
 import { SkeletonCardGrid } from '@/components/Skeleton'
 
-const FILTERS = ['All', 'Playlists', 'Local Files']
+const FILTERS = ['All', 'Songs', 'Albums', 'Artists', 'Jukebox']
+
+const FEATURED_ITEMS = [
+  { id: 'f-1', title: 'Chill Vibes', subtitle: 'Playlist', gradient: 'from-cyan-500 to-blue-600', textCol: 'text-cyan-200' },
+  { id: 'f-2', title: 'Top 50', subtitle: 'YouTube', gradient: 'from-rose-500 to-amber-600', textCol: 'text-amber-200' },
+  { id: 'f-3', title: 'Trending Now', subtitle: 'Playlist', gradient: 'from-purple-600 to-pink-600', textCol: 'text-pink-200' },
+]
 
 function SectionHeader({ title }) {
   return (
@@ -122,13 +128,35 @@ export default function Home() {
             onClick={() => setFilter(f)}
             aria-pressed={filter === f}
             className={`shrink-0 text-sm font-semibold px-4 py-2 rounded-[8px] transition-colors ${
-              filter === f ? 'bg-text text-black' : 'bg-surface-elevated text-text hover:bg-surface-hover'
+              filter === f ? 'bg-brand text-white' : 'bg-surface-elevated text-text hover:bg-surface-hover'
             }`}
           >
             {f}
           </button>
         ))}
       </div>
+
+      {/* Featured section matching design reference */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg md:text-xl font-bold text-white">Featured</h2>
+          <span className="text-xs font-semibold text-brand cursor-pointer hover:underline">See all</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {FEATURED_ITEMS.map((item) => (
+            <div
+              key={item.id}
+              className={`relative aspect-video rounded-xl bg-gradient-to-br ${item.gradient} p-4 flex flex-col justify-end text-white shadow-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform`}
+            >
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="relative z-10">
+                <p className="font-black text-sm md:text-base leading-tight drop-shadow">{item.title}</p>
+                <p className={`text-xs ${item.textCol} font-medium`}>{item.subtitle}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {user && recentLoading && (
         <section className="mb-10">

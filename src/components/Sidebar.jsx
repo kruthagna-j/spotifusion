@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Search, Heart, ListMusic, Library, Plus, Music, Settings2 } from "lucide-react"
+import { Home, Search, Sliders, Heart, ListMusic, Library, Plus, Music, Settings2 } from "lucide-react"
 import { useAuth } from '@/context/AuthContext'
 import { usePlaylists } from '@/hooks/useLibraryData'
 import Logo from '@/components/Logo'
@@ -7,6 +7,7 @@ import Logo from '@/components/Logo'
 const nav = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/search', label: 'Search', icon: Search },
+  { to: '/equalizer', label: 'Equalizer', icon: Sliders },
 ]
 
 export default function Sidebar() {

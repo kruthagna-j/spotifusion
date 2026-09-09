@@ -1,15 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Search, Library, Plus } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
+import { Home, Search, Library, Sliders } from 'lucide-react'
 
 export default function MobileNav() {
-  const navigate = useNavigate()
-
-  // "Create" jumps to Library with a flag that auto-opens the existing
-  // new-playlist form there, rather than duplicating that logic here.
-  function handleCreate() {
-    navigate('/library', { state: { openCreate: true } })
-  }
-
   return (
     <nav
       aria-label="Primary"
@@ -18,14 +10,7 @@ export default function MobileNav() {
       <Tab to="/" icon={<Home size={22} />} label="Home" />
       <Tab to="/search" icon={<Search size={22} />} label="Search" />
       <Tab to="/library" icon={<Library size={22} />} label="Library" />
-      <button
-        onClick={handleCreate}
-        aria-label="Create a new playlist"
-        className="flex flex-col items-center gap-1 py-1 px-3 text-[11px] font-medium text-text-subdued hover:text-text transition-colors"
-      >
-        <Plus size={22} aria-hidden="true" />
-        <span>Create</span>
-      </button>
+      <Tab to="/equalizer" icon={<Sliders size={22} />} label="Equalizer" />
     </nav>
   )
 }

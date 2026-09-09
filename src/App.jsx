@@ -15,6 +15,7 @@ import RecentlyPlayed from '@/pages/RecentlyPlayed'
 import Queue from '@/pages/Queue'
 import Artist from '@/pages/Artist'
 import Album from '@/pages/Album'
+import Equalizer from '@/pages/Equalizer'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useAuxPane } from '@/context/AuxPaneContext'
@@ -52,6 +53,7 @@ export default function App() {
               <Route path="/queue" element={<Queue />} />
               <Route path="/artist/:name" element={<Artist />} />
               <Route path="/album/:name" element={<Album />} />
+              <Route path="/equalizer" element={<Equalizer />} />
             </Routes>
           </main>
         </div>

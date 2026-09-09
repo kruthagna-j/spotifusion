@@ -5,25 +5,25 @@
      connector (fileKey 36KapUDURndizgOFfkMKLE), not approximated:
      Fg/Primary #E0E0E0, Fg/Secondary #898989, card fill #202020,
      row/card radius 10px, font Satoshi. */
-  --color-bg: #000000;
-  --color-surface: #111111;
-  --color-surface-elevated: #202020;
-  --color-surface-hover: #2b2b2b;
-  --color-surface-highlight: #202020;
-  --color-border: #2a2a2a;
-  --color-brand: #1ed760;
-  --color-brand-hover: #3be477;
-  --color-text: #e0e0e0;
-  --color-text-muted: #898989;
-  --color-text-subdued: #6a6a6a;
+  --color-bg: #090911;
+  --color-surface: #121222;
+  --color-surface-elevated: #1a1a2e;
+  --color-surface-hover: #262642;
+  --color-surface-highlight: #23233c;
+  --color-border: #24243a;
+  --color-brand: #8b5cf6;
+  --color-brand-hover: #a78bfa;
+  --color-text: #f3f3fa;
+  --color-text-muted: #8888a5;
+  --color-text-subdued: #5a5a78;
   --font-sans: "Satoshi", "Helvetica Neue", Arial, sans-serif;
 
-  /* Design-system scale (Phase 3): centralized so cards/buttons/inputs stay
-     consistent instead of scattering arbitrary radius/shadow values. */
-  --radius-card: 0.625rem;    /* 10px — matches Figma's rounded-[10px] rows/cards */
+  /* Design-system scale */
+  --radius-card: 0.75rem;     /* 12px */
   --radius-pill: 9999px;      /* buttons, pills, avatars */
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.35);
 }
 
 html, body, #root {
