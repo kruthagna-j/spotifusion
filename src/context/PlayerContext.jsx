@@ -5,6 +5,19 @@ import { getLocalSongBlob } from '@/lib/localMusicDb'
 import { isPrivateSession } from '@/lib/privacySettings'
 
 const PlayerContext = createContext(null)
+const PLAYBACK_SESSION_KEY = 'spotifusion:playback-session:v1'
+
+function readPlaybackSession() {
+  try {
+    const raw = window.localStorage.getItem(PLAYBACK_SESSION_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    if (!session || session.version !== 1 || !Array.isArray(session.queue)) return null
+    return session
+  } catch {
+    return null
+  }
+}
 
 // 5-band EQ, standard-ish frequencies. Only applies to local files: YouTube
 // audio plays inside a cross-origin <iframe>, and browsers deliberately
@@ -54,6 +67,8 @@ export function PlayerProvider({ children }) {
   const currentObjectUrl = useRef(null)
   const progressTimer = useRef(null)
   const sleepTimerRef = useRef(null)
+  const pendingResumeRef = useRef(null)
+  const loadedTrackIdRef = useRef(null)
 
   // Web Audio graph for the local-file EQ (created lazily, once).
   const audioCtxRef = useRef(null)
@@ -74,9 +89,66 @@ export function PlayerProvider({ children }) {
   const [outputDeviceLabel, setOutputDeviceLabel] = useState(null)
   const [sleepTimerSeconds, setSleepTimerSeconds] = useState(null)
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false)
+  const [sessionHydrated, setSessionHydrated] = useState(false)
 
   const currentTrack = queueIndex >= 0 ? queue[queueIndex] : null
   const isLocal = currentTrack?.source === 'local'
+
+  // Restore the prior browser session without attempting autoplay. Browsers
+  // require a user gesture before audio can start, so the restored track is
+  // loaded only when the user next presses Play.
+  useEffect(() => {
+    const session = readPlaybackSession()
+    if (session) {
+      const restoredQueue = session.queue.filter((track) => track && typeof track.id === 'string')
+      const restoredIndex = Number.isInteger(session.queueIndex)
+        ? Math.min(Math.max(session.queueIndex, 0), restoredQueue.length - 1)
+        : -1
+      setQueue(restoredQueue)
+      setQueueIndex(restoredQueue.length ? restoredIndex : -1)
+      setVolume(Number.isFinite(session.volume) ? Math.min(Math.max(session.volume, 0), 100) : 70)
+      setMuted(Boolean(session.muted))
+      setShuffle(Boolean(session.shuffle))
+      setRepeatMode(['off', 'all', 'one'].includes(session.repeatMode) ? session.repeatMode : 'off')
+      setEqGains(
+        Array.isArray(session.eqGains) && session.eqGains.length === EQ_BANDS.length
+          ? session.eqGains.map((gain) => (Number.isFinite(gain) ? gain : 0))
+          : EQ_PRESETS.Flat
+      )
+      setEqPreset(typeof session.eqPreset === 'string' ? session.eqPreset : 'Flat')
+      if (restoredQueue[restoredIndex] && Number.isFinite(session.progress) && session.progress > 0) {
+        pendingResumeRef.current = { trackId: restoredQueue[restoredIndex].id, seconds: session.progress }
+        setProgress(session.progress)
+      }
+    }
+    setSessionHydrated(true)
+  }, [])
+
+  // Keep browser-only state local. The queue intentionally contains metadata
+  // only: local audio blobs and folder handles remain in IndexedDB.
+  useEffect(() => {
+    if (!sessionHydrated) return
+    try {
+      window.localStorage.setItem(
+        PLAYBACK_SESSION_KEY,
+        JSON.stringify({
+          version: 1,
+          queue,
+          queueIndex,
+          progress,
+          volume,
+          muted,
+          shuffle,
+          repeatMode,
+          eqGains,
+          eqPreset,
+        })
+      )
+    } catch {
+      // Storage can be unavailable (for example, private browsing). Playback
+      // remains fully functional for the current session in that case.
+    }
+  }, [sessionHydrated, queue, queueIndex, progress, volume, muted, shuffle, repeatMode, eqGains, eqPreset])
 
   // Keep the latest handler in a ref so the <audio> "ended" listener (added
   // once) always calls the current repeatMode/queue-aware logic.
@@ -239,18 +311,39 @@ export function PlayerProvider({ children }) {
         const audio = localAudioRef.current
         audio.src = url
         audio.volume = muted ? 0 : volume / 100
+        const pendingResume = pendingResumeRef.current
+        if (pendingResume?.trackId === track.id) {
+          const resumeAt = pendingResume.seconds
+          const applyResumePosition = () => {
+            audio.currentTime = resumeAt
+            setProgress(resumeAt)
+          }
+          if (audio.readyState >= 1) applyResumePosition()
+          else audio.addEventListener('loadedmetadata', applyResumePosition, { once: true })
+          pendingResumeRef.current = null
+        }
         try {
           ensureEqGraph()
           await audioCtxRef.current?.resume()
           await audio.play()
+          loadedTrackIdRef.current = track.id
         } catch {
           setIsPlaying(false)
         }
       } else {
         localAudioRef.current?.pause()
         if (!ytPlayerRef.current?.loadVideoById) return
-        ytPlayerRef.current.loadVideoById(track.id)
+        const pendingResume = pendingResumeRef.current
+        const startSeconds = pendingResume?.trackId === track.id ? pendingResume.seconds : undefined
+        ytPlayerRef.current.loadVideoById(
+          startSeconds ? { videoId: track.id, startSeconds } : track.id
+        )
+        if (startSeconds) {
+          setProgress(startSeconds)
+          pendingResumeRef.current = null
+        }
         ytPlayerRef.current.setVolume(muted ? 0 : volume)
+        loadedTrackIdRef.current = track.id
         setIsPlaying(true)
       }
     },
@@ -350,11 +443,16 @@ export function PlayerProvider({ children }) {
   function playTrack(track, contextTracks = null) {
     const list = contextTracks || [track]
     const idx = list.findIndex((t) => t.id === track.id)
+    pendingResumeRef.current = null
     setQueue(list)
     loadAndPlay(idx === -1 ? 0 : idx, list)
   }
 
   function togglePlay() {
+    if (currentTrack && loadedTrackIdRef.current !== currentTrack.id) {
+      loadAndPlay(queueIndex)
+      return
+    }
     if (isLocal) {
       if (!localAudioRef.current?.src) return
       if (isPlaying) localAudioRef.current.pause()
