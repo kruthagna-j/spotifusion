@@ -17,7 +17,7 @@ export default function TopBar() {
   const [profileOpen, setProfileOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-3 bg-bg/90 backdrop-blur-md">
+    <header className="sf-legacy-topbar sticky top-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-3 bg-bg/90 backdrop-blur-md">
       <div className="flex items-center gap-6">
         <Logo withWordmark={false} className="md:hidden" />
 

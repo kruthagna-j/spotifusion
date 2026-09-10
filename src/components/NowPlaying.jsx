@@ -1,52 +1,31 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  X, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
-  Heart, ListMusic, Moon, Volume2, VolumeX, Plus, Share2, Clock3,
-  ChevronDown, Music2, Radio
+  ChevronDown, Heart, Shuffle, Repeat, Repeat1, Play, Pause,
+  SkipBack, SkipForward, Volume2, VolumeX, SlidersHorizontal,
+  Sparkles, Moon, Share2, ListMusic,
 } from 'lucide-react'
 import { usePlayer } from '@/context/PlayerContext'
 import { useAuth } from '@/context/AuthContext'
 import { likeSong, unlikeSong } from '@/lib/library'
 import { useLikedSongs } from '@/hooks/useLibraryData'
 import { formatTime } from '@/lib/timeFormat'
-import QueuePanel from '@/components/QueuePanel'
-
-function parseSyncedLyrics(raw) {
-  if (!raw || typeof raw !== 'string') return []
-  return raw.split(/\r?\n/).flatMap((line) => {
-    const matches = [...line.matchAll(/\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g)]
-    const text = line.replace(/\[[^\]]+\]/g, '').trim()
-    return matches.map((m) => ({
-      time: Number(m[1]) * 60 + Number(m[2]) + Number(`0.${m[3] || '0'}`),
-      text,
-    }))
-  }).filter((x) => x.text).sort((a, b) => a.time - b.time)
-}
-
-function lyricsForTrack(track) {
-  return parseSyncedLyrics(track?.lyrics || track?.syncedLyrics || '')
-}
 
 export default function NowPlaying({ route = false }) {
+  const navigate = useNavigate()
   const player = usePlayer()
   const { user } = useAuth()
   const liked = useLikedSongs(user?.uid)
-  const [tab, setTab] = useState('lyrics')
   const [sleepOpen, setSleepOpen] = useState(false)
   const current = player.currentTrack
-  const isLiked = !!current && liked.some((t) => t.id === current.id)
-  const lyrics = useMemo(() => lyricsForTrack(current), [current])
-  const activeLyric = useMemo(() => {
-    let idx = -1
-    lyrics.forEach((line, i) => { if (line.time <= player.progress) idx = i })
-    return idx
-  }, [lyrics, player.progress])
+  const isLiked = !!current && liked.some((track) => track.id === current.id)
 
   if (!current || (!route && !player.nowPlayingOpen)) return null
 
   const toggleLike = () => {
     if (!user) return
-    isLiked ? unlikeSong(user.uid, current.id) : likeSong(user.uid, current)
+    if (isLiked) unlikeSong(user.uid, current.id)
+    else likeSong(user.uid, current)
   }
 
   const share = async () => {
@@ -54,92 +33,79 @@ export default function NowPlaying({ route = false }) {
     try {
       if (navigator.share) await navigator.share({ title: current.title, text })
       else await navigator.clipboard.writeText(text)
-    } catch { /* user cancelled */ }
+    } catch { /* user cancelled or clipboard unavailable */ }
+  }
+
+  const dismiss = () => {
+    if (route) navigate(-1)
+    else player.closeNowPlaying()
   }
 
   return (
-    <div className={route ? 'sf-player-route' : 'sf-now-playing-overlay'}>
-      <header className="h-16 shrink-0 flex items-center justify-between px-5 md:px-8 border-b border-white/10">
-        <button onClick={player.closeNowPlaying} className="p-2 rounded-full hover:bg-white/10" aria-label="Close Now Playing">
-          <ChevronDown size={26} />
-        </button>
-        <div className="text-center">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-text-subdued">Now Playing</p>
-          <p className="text-xs text-text-muted truncate max-w-[240px]">{current.artist}</p>
+    <div data-testid="player-screen-view" className={route ? 'sf-player-route sf-emergent-player' : 'sf-now-playing-overlay sf-emergent-player'}>
+      <div className="sf-emergent-player__aura" style={current.thumbnail ? { backgroundImage: `url(${current.thumbnail})` } : undefined} aria-hidden="true" />
+      <header className="sf-emergent-player__header">
+        <button type="button" onClick={dismiss} className="sf-emergent-icon-button" aria-label="Minimize player"><ChevronDown size={22} /></button>
+        <div className="sf-emergent-player__heading">
+          <span>Playing From Spotifusion</span>
+          <strong>Now Playing</strong>
         </div>
-        <button onClick={share} className="p-2 rounded-full hover:bg-white/10" aria-label="Share song"><Share2 size={20} /></button>
+        <button type="button" onClick={() => navigate('/lyrics')} className="sf-emergent-icon-button sf-emergent-icon-button--accent" aria-label="Open lyrics and queue"><Sparkles size={18} /></button>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-6 md:px-10">
-        <div className="max-w-6xl mx-auto grid lg:grid-cols-[minmax(320px,520px)_1fr] gap-8 xl:gap-14 items-center min-h-full">
-          <section className="flex flex-col items-center lg:items-start">
-            <div className="relative w-full max-w-[460px] aspect-square rounded-2xl overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,.65)]">
-              {current.thumbnail ? <img src={current.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-surface-elevated flex items-center justify-center"><Music2 size={80} /></div>}
-            </div>
-            <div className="w-full max-w-[460px] mt-6 flex items-start gap-4">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-2xl md:text-3xl font-bold truncate">{current.title}</h1>
-                <p className="text-text-muted text-lg truncate mt-1">{current.artist}</p>
-              </div>
-              <button onClick={toggleLike} className="p-2 mt-1" aria-label={isLiked ? 'Unlike' : 'Like'}>
-                <Heart size={26} className={isLiked ? 'fill-brand text-brand' : 'text-text-muted'} />
-              </button>
-            </div>
+      <div className="sf-emergent-player__scroll">
+        <div className="sf-emergent-player__art-wrap">
+          <div className={`sf-emergent-player__art ${player.isPlaying ? 'is-playing' : ''}`}>
+            {current.thumbnail ? <img src={current.thumbnail} alt={current.title} data-testid="player-album-artwork" /> : <div className="sf-emergent-player__fallback">♪</div>}
+          </div>
+          <Waveform isPlaying={player.isPlaying} />
+        </div>
 
-            <div className="w-full max-w-[460px] mt-5">
-              <input type="range" min="0" max={player.duration || 0} value={Math.min(player.progress, player.duration || 0)} onChange={(e) => player.seekTo(Number(e.target.value))} className="w-full accent-white" aria-label="Seek" />
-              <div className="flex justify-between text-[11px] text-text-subdued mt-1"><span>{formatTime(player.progress)}</span><span>{formatTime(player.duration)}</span></div>
+        <div className="sf-emergent-player__details">
+          <div className="sf-emergent-player__title-row">
+            <div className="sf-emergent-player__track-copy">
+              <h1 data-testid="player-track-title">{current.title}</h1>
+              <p data-testid="player-track-artist">{current.artist}</p>
             </div>
+            <button type="button" onClick={toggleLike} className={`sf-emergent-like ${isLiked ? 'is-liked' : ''}`} aria-label={isLiked ? 'Unlike track' : 'Like track'}><Heart size={22} fill={isLiked ? 'currentColor' : 'none'} /></button>
+          </div>
 
-            <div className="w-full max-w-[460px] flex items-center justify-center gap-7 md:gap-9 mt-5">
-              <button onClick={player.toggleShuffle} className={player.shuffle ? 'text-brand' : 'text-text-muted'} aria-label="Shuffle"><Shuffle size={20}/></button>
-              <button onClick={player.playPrevious} aria-label="Previous"><SkipBack size={28}/></button>
-              <button onClick={player.togglePlay} aria-label={player.isPlaying ? 'Pause' : 'Play'} className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform">
-                {player.isPlaying ? <Pause size={27}/> : <Play size={27} className="ml-1"/>}
-              </button>
-              <button onClick={player.playNext} aria-label="Next"><SkipForward size={28}/></button>
-              <button onClick={player.cycleRepeat} className={player.repeatMode !== 'off' ? 'text-brand' : 'text-text-muted'} aria-label="Repeat">
-                {player.repeatMode === 'one' ? <Repeat1 size={20}/> : <Repeat size={20}/>} 
-              </button>
-            </div>
+          <div className="sf-emergent-seek">
+            <input type="range" min="0" max={player.duration || 100} value={Math.min(player.progress, player.duration || 0)} onChange={(event) => player.seekTo(Number(event.target.value))} aria-label="Seek" />
+            <div><span>{formatTime(player.progress)}</span><span>{formatTime(player.duration)}</span></div>
+          </div>
 
-            <div className="w-full max-w-[460px] flex items-center gap-3 mt-6">
-              <Volume2 size={16} className="text-text-muted shrink-0" />
-              <input type="range" min="0" max="100" value={player.muted ? 0 : player.volume} onChange={(e) => player.changeVolume(Number(e.target.value))} className="flex-1 accent-white" aria-label="Volume" />
-              <button onClick={player.toggleMute} aria-label="Mute"><VolumeX size={17} className="text-text-muted"/></button>
-            </div>
+          <div className="sf-emergent-transport">
+            <button type="button" onClick={player.toggleShuffle} className={player.shuffle ? 'is-active' : ''} aria-label="Toggle shuffle"><Shuffle size={20} /></button>
+            <button type="button" onClick={player.playPrevious} aria-label="Previous track"><SkipBack size={26} /></button>
+            <button type="button" onClick={player.togglePlay} className="sf-emergent-play" aria-label={player.isPlaying ? 'Pause' : 'Play'}>{player.isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}</button>
+            <button type="button" onClick={player.playNext} aria-label="Next track"><SkipForward size={26} /></button>
+            <button type="button" onClick={player.cycleRepeat} className={player.repeatMode !== 'off' ? 'is-active' : ''} aria-label="Toggle repeat">{player.repeatMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
+          </div>
 
-            <div className="flex items-center gap-2 mt-5 flex-wrap justify-center">
-              <button onClick={() => setTab('queue')} className="np-pill"><ListMusic size={15}/> Queue</button>
-              <button onClick={() => setSleepOpen(v => !v)} className={`np-pill ${player.sleepTimerSeconds ? 'text-brand' : ''}`}><Moon size={15}/> Sleep</button>
-              <button onClick={() => setTab('lyrics')} className="np-pill"><Music2 size={15}/> Lyrics</button>
-              <button onClick={share} className="np-pill"><Share2 size={15}/> Share</button>
-            </div>
-            {sleepOpen && <div className="mt-3 bg-surface-elevated border border-border rounded-xl p-2 w-full max-w-[320px]">
-              <p className="text-xs font-semibold text-text-muted px-3 py-2">Sleep timer</p>
-              {[5,10,15,30,60].map(m => <button key={m} onClick={() => { player.setSleepTimer(m*60); setSleepOpen(false) }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-hover text-sm">{m} minutes</button>)}
-              <button onClick={() => { player.setSleepTimer(Math.max(1, player.duration-player.progress)); setSleepOpen(false) }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-hover text-sm">End of track</button>
-              {player.sleepTimerSeconds && <button onClick={() => {player.clearSleepTimer(); setSleepOpen(false)}} className="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-hover text-sm text-red-300">Cancel timer</button>}
-            </div>}
-          </section>
+          <div className="sf-emergent-volume">
+            <Volume2 size={16} aria-hidden="true" />
+            <input type="range" min="0" max="100" value={player.muted ? 0 : player.volume} onChange={(event) => player.changeVolume(Number(event.target.value))} aria-label="Volume" />
+            <button type="button" onClick={player.toggleMute} aria-label={player.muted ? 'Unmute' : 'Mute'}>{player.muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
+          </div>
 
-          <section className="min-h-[420px] bg-white/[0.035] border border-white/10 rounded-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center border-b border-white/10 p-2 gap-1">
-              {['lyrics','queue','about'].map(name => <button key={name} onClick={() => setTab(name)} className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize ${tab === name ? 'bg-white/10 text-white' : 'text-text-muted hover:text-white'}`}>{name}</button>)}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-6">
-              {tab === 'lyrics' && <>
-                <div className="flex items-center gap-2 text-text-muted mb-5"><Radio size={16}/> Lyrics</div>
-                {lyrics.length ? <div className="space-y-3 text-lg md:text-2xl font-bold leading-tight">{lyrics.map((line, i) => <button key={`${line.time}-${i}`} onClick={() => player.seekTo(line.time)} className={`block w-full text-left transition-all ${i === activeLyric ? 'text-white scale-[1.01]' : 'text-text-subdued hover:text-text'}`}>{line.text}</button>)}</div> : <div className="h-full min-h-[320px] flex flex-col items-center justify-center text-center"><Music2 size={42} className="text-text-subdued mb-4"/><h3 className="font-bold mb-2">Lyrics</h3><p className="text-sm text-text-muted max-w-sm">Synchronized lyrics will appear here when timestamped lyrics are available for this track. Spotifusion does not upload your local music to obtain lyrics.</p></div>}
-              </>}
-              {tab === 'queue' && <QueuePanel embedded onClose={() => setTab('lyrics')} />}
-              {tab === 'about' && <div className="space-y-6"><div><p className="text-xs uppercase tracking-wider text-text-subdued">Track</p><h3 className="text-xl font-bold mt-1">{current.title}</h3><p className="text-text-muted">{current.artist}</p></div><div className="grid sm:grid-cols-2 gap-3"><Info label="Source" value={current.source === 'local' ? 'Local device' : 'YouTube Music'} /><Info label="Duration" value={formatTime(player.duration)} /><Info label="Queue position" value={player.queueIndex >= 0 ? `${player.queueIndex + 1} / ${player.queue.length}` : '—'} /><Info label="Repeat" value={player.repeatMode} /></div><button onClick={() => player.enqueue(current)} className="np-action"><Plus size={16}/> Add another copy to queue</button></div>}
-            </div>
-          </section>
+          <div className="sf-emergent-utilities">
+            <button type="button" onClick={() => navigate('/queue')}><ListMusic size={15} /> Queue</button>
+            <button type="button" onClick={() => setSleepOpen((open) => !open)} className={player.sleepTimerSeconds ? 'is-active' : ''}><Moon size={15} /> Sleep</button>
+            <button type="button" onClick={() => navigate('/lyrics')}><Sparkles size={15} /> Lyrics</button>
+            <button type="button" onClick={share}><Share2 size={15} /> Share</button>
+          </div>
+          {sleepOpen && <SleepMenu player={player} onClose={() => setSleepOpen(false)} />}
         </div>
       </div>
     </div>
   )
 }
 
-function Info({label,value}) { return <div className="bg-white/[0.04] rounded-xl p-4"><p className="text-xs text-text-subdued">{label}</p><p className="font-semibold mt-1 capitalize">{value}</p></div> }
+function Waveform({ isPlaying }) {
+  return <div className={`sf-emergent-waveform ${isPlaying ? 'is-playing' : ''}`} aria-label={isPlaying ? 'Audio playing' : 'Audio paused'}>{Array.from({ length: 22 }, (_, index) => <i key={index} style={{ '--bar': `${22 + ((index * 17) % 62)}%` }} />)}</div>
+}
+
+function SleepMenu({ player, onClose }) {
+  return <div className="sf-emergent-sleep-menu"><strong>Sleep timer</strong>{[5, 10, 15, 30, 60].map((minutes) => <button key={minutes} onClick={() => { player.setSleepTimer(minutes * 60); onClose() }}>{minutes} minutes</button>)}{player.sleepTimerSeconds && <button className="is-danger" onClick={() => { player.clearSleepTimer(); onClose() }}>Cancel timer</button>}</div>
+}
