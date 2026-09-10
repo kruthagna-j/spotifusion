@@ -24,9 +24,10 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
-export const db = getFirestore(app)
+export const firebaseConfigured = Object.values(firebaseConfig).every(Boolean)
+export const app = firebaseConfigured ? initializeApp(firebaseConfig) : null
+export const auth = firebaseConfigured ? getAuth(app) : { currentUser: null }
+export const db = firebaseConfigured ? getFirestore(app) : null
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
@@ -39,6 +40,7 @@ function isLikelyWebView() {
 }
 
 export async function signInWithGoogle() {
+  if (!firebaseConfigured) throw new Error('Firebase authentication is not configured for this build.')
   if (isLikelyWebView()) {
     return signInWithRedirect(auth, googleProvider)
   }
@@ -57,16 +59,22 @@ export async function signInWithGoogle() {
 }
 
 export function signOut() {
+  if (!firebaseConfigured) return Promise.resolve()
   return fbSignOut(auth)
 }
 
 export function watchAuth(callback) {
+  if (!firebaseConfigured) {
+    callback(null)
+    return () => {}
+  }
   return onAuthStateChanged(auth, callback)
 }
 
 // Ensure a /users/{uid} profile doc exists, matching Spotify's "your library"
 // data model: liked songs, playlists, recently played all key off this doc.
 export async function ensureUserProfile(user) {
+  if (!firebaseConfigured || !db) throw new Error('Firebase is not configured.')
   const ref = doc(db, 'users', user.uid)
   const snap = await getDoc(ref)
   if (!snap.exists()) {
@@ -85,6 +93,6 @@ export async function ensureUserProfile(user) {
 // deleteUserData() in library.js — call both together from the UI.
 export async function deleteCurrentUserAccount() {
   const { deleteUser } = await import('firebase/auth')
-  if (!auth.currentUser) throw new Error('No signed-in user')
+  if (!firebaseConfigured || !auth.currentUser) throw new Error('No signed-in user')
   return deleteUser(auth.currentUser)
 }

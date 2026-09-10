@@ -49,16 +49,16 @@ export default function PlayerBar() {
           just above the bottom nav, matching the Figma reference (NowPlaying
           node: rounded-[10px], margin from screen edges, sits right above
           the tab bar) rather than a flush full-width bar. */}
-      <div className="md:hidden px-2 pt-2 bg-bg">
+      <div className="sf-mini-player-wrap md:hidden">
         <button
           onClick={() => player.openNowPlaying()}
           aria-label={`Now playing: ${currentTrack.title} by ${currentTrack.artist}. Tap to expand.`}
-          className="flex items-center gap-3 px-2 py-2 bg-surface-elevated rounded-[10px] shadow-card w-full text-left"
+          className="sf-mini-player"
         >
-          <img src={currentTrack.thumbnail} alt="" className="w-10 h-10 rounded-[6px] object-cover" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm truncate">{currentTrack.title}</p>
-            <p className="text-xs text-text-muted truncate">{currentTrack.artist}</p>
+          <img src={currentTrack.thumbnail} alt="" className="sf-mini-player__art" />
+          <div className="sf-mini-player__meta">
+            <p>{currentTrack.title}</p>
+            <small>{currentTrack.artist}</small>
           </div>
           <span
             role="button"
@@ -68,7 +68,7 @@ export default function PlayerBar() {
               e.stopPropagation()
               player.togglePlay()
             }}
-            className="p-2 mr-1"
+            className="sf-mini-player__toggle"
           >
             {player.isPlaying ? <Pause size={22} /> : <Play size={22} />}
           </span>

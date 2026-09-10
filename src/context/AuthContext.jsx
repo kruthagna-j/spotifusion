@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
 import {
-  auth,
   signInWithGoogle,
   signOut as fbSignOut,
   ensureUserProfile,
+  watchAuth,
 } from "../lib/firebase";
 
 const AuthContext = createContext(null);
@@ -15,7 +14,7 @@ export const AuthProvider = ({ children }) => {
   const signInInFlight = useRef(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = watchAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         try {

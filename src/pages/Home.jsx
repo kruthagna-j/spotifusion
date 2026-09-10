@@ -140,13 +140,13 @@ export default function Home() {
       <section className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg md:text-xl font-bold text-white">Featured</h2>
-          <span className="text-xs font-semibold text-brand cursor-pointer hover:underline">See all</span>
+          <Link to="/playlists" className="text-xs font-semibold text-brand cursor-pointer hover:underline">See all</Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="flex sm:grid sm:grid-cols-3 gap-3 sm:gap-4 overflow-x-auto scrollbar-none">
           {FEATURED_ITEMS.map((item) => (
             <div
               key={item.id}
-              className={`relative aspect-video rounded-xl bg-gradient-to-br ${item.gradient} p-4 flex flex-col justify-end text-white shadow-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform`}
+              className={`relative shrink-0 w-[156px] sm:w-auto aspect-[1.12] sm:aspect-video rounded-2xl bg-gradient-to-br ${item.gradient} p-3 sm:p-4 flex flex-col justify-end text-white shadow-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform`}
             >
               <div className="absolute inset-0 bg-black/20" />
               <div className="relative z-10">

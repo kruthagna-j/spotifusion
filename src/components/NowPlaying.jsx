@@ -27,7 +27,7 @@ function lyricsForTrack(track) {
   return parseSyncedLyrics(track?.lyrics || track?.syncedLyrics || '')
 }
 
-export default function NowPlaying() {
+export default function NowPlaying({ route = false }) {
   const player = usePlayer()
   const { user } = useAuth()
   const liked = useLikedSongs(user?.uid)
@@ -42,7 +42,7 @@ export default function NowPlaying() {
     return idx
   }, [lyrics, player.progress])
 
-  if (!current || !player.nowPlayingOpen) return null
+  if (!current || (!route && !player.nowPlayingOpen)) return null
 
   const toggleLike = () => {
     if (!user) return
@@ -58,7 +58,7 @@ export default function NowPlaying() {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col">
+    <div className={route ? 'sf-player-route' : 'sf-now-playing-overlay'}>
       <header className="h-16 shrink-0 flex items-center justify-between px-5 md:px-8 border-b border-white/10">
         <button onClick={player.closeNowPlaying} className="p-2 rounded-full hover:bg-white/10" aria-label="Close Now Playing">
           <ChevronDown size={26} />

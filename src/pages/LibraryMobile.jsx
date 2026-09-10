@@ -33,11 +33,11 @@ export default function LibraryMobile() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Your Library</h1>
+    <div className="sf-library-page p-4 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-black tracking-tight">Your Library</h1>
         {user && (
-          <button onClick={() => setCreating(true)} className="p-2 rounded-full hover:bg-surface-hover">
+          <button onClick={() => setCreating(true)} className="sf-round-action" aria-label="Create playlist">
             <Plus size={22} />
           </button>
         )}
@@ -69,7 +69,7 @@ export default function LibraryMobile() {
           )}
 
           <Link to="/liked-songs" className="flex items-center gap-3 py-2">
-            <div className="w-12 h-12 rounded bg-gradient-to-br from-indigo-400 to-white flex items-center justify-center shrink-0">
+            <div className="sf-library-icon sf-library-icon--liked">
               <Heart size={18} fill="white" className="text-white" />
             </div>
             <div>
@@ -79,12 +79,12 @@ export default function LibraryMobile() {
           </Link>
 
           {playlists.map((p) => (
-            <Link key={p.id} to={`/playlist/${p.id}`} className="flex items-center gap-3 py-2">
-              <div className="w-12 h-12 rounded bg-surface-highlight flex items-center justify-center shrink-0">
+          <Link key={p.id} to={`/playlist/${p.id}`} className="sf-library-card flex items-center gap-3">
+              <div className="sf-library-icon">
                 <ListMusic size={18} className="text-text-subdued" />
               </div>
-              <div>
-                <p className="text-sm font-medium">{p.name}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">{p.name}</p>
                 <p className="text-xs text-text-subdued">Playlist • {p.trackIds?.length || 0} songs</p>
               </div>
             </Link>

@@ -16,5 +16,5 @@ export default function NowPlayingRoute() {
     return <div className="min-h-full grid place-items-center p-8 text-center"><div><Music2 size={52} className="mx-auto text-text-subdued mb-4"/><h1 className="text-3xl font-black">Nothing is playing</h1><p className="text-text-muted mt-2">Choose a song to open the full player.</p><Link to="/search" className="sf-primary-button mt-6">Find music</Link></div></div>
   }
 
-  return <NowPlaying />
+  return <NowPlaying route />
 }
