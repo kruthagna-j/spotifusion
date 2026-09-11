@@ -95,7 +95,7 @@ export default function Search() {
 
   if (!user) {
     return (
-      <div className="p-4 md:p-6 flex flex-col items-center text-center pt-20">
+      <div className="emergent-search-page p-4 md:p-6 flex flex-col items-center text-center pt-20">
         <SearchIcon size={40} className="text-text-subdued mb-4" aria-hidden="true" />
         <h1 className="text-xl font-bold mb-2">Sign in to search</h1>
         <p className="text-text-muted text-sm max-w-sm mb-6">
@@ -113,7 +113,7 @@ export default function Search() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="emergent-search-page p-4 md:p-6">
       <div className="relative max-w-md mb-6">
         <SearchIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-black" aria-hidden="true" />
         <input
