@@ -1,47 +1,100 @@
-import { useState } from 'react'
-import { ChevronRight, FolderOpen, Heart, ListMusic, Plus } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Plus, Heart, ListMusic } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { usePlaylists, useLikedSongs } from '@/hooks/useLibraryData'
+import { usePlaylists } from '@/hooks/useLibraryData'
 import { createPlaylist } from '@/lib/library'
-import { useLocalSongs } from '@/lib/localMusicDb'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
+import LocalFilesSection from '@/components/LocalFilesSection'
 
-const LIBRARY_TABS = ['Playlists', 'Artists', 'Albums', 'Songs', 'Local Files']
-
+// Mobile-only "Your Library" tab (desktop shows this inside the sidebar instead)
 export default function LibraryMobile() {
-  const navigate = useNavigate()
   const { user, signIn } = useAuth()
   const playlists = usePlaylists(user?.uid)
-  const likedSongs = useLikedSongs(user?.uid)
-  const [localSongs] = useLocalSongs()
-  const [activeTab, setActiveTab] = useState('Playlists')
+  const navigate = useNavigate()
+  const location = useLocation()
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
 
-  async function handleCreate(event) {
-    event.preventDefault()
-    if (!user || !name.trim()) return
+  // Opened via the mobile bottom-nav "Create" tab.
+  useEffect(() => {
+    if (location.state?.openCreate && user) {
+      setCreating(true)
+      // Clear the flag so it doesn't re-trigger on back/forward navigation.
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location, user, navigate])
+
+  async function handleCreate() {
+    if (!name.trim()) return
     const id = await createPlaylist(user.uid, name.trim())
     setCreating(false)
     setName('')
     navigate(`/playlist/${id}`)
   }
 
-  if (!user) return <div className="sf-emergent-library"><div className="sf-emergent-screen-header"><div><h1>Library</h1><p>Your personal collection</p></div><button type="button" onClick={signIn} aria-label="Sign in"><Plus size={19} /></button></div><div className="sf-emergent-auth-card"><p>Sign in to create playlists, like songs, and sync your library.</p><button type="button" onClick={signIn}>Sign in with Google</button></div><LibraryTabs activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} /></div>
+  return (
+    <div className="sf-library-page p-4 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-black tracking-tight">Your Library</h1>
+        {user && (
+          <button onClick={() => setCreating(true)} className="sf-round-action" aria-label="Create playlist">
+            <Plus size={22} />
+          </button>
+        )}
+      </div>
 
-  return <div className="sf-emergent-library">
-    <div className="sf-emergent-screen-header"><div><h1>Library</h1><p>Your personal collection</p></div><button type="button" onClick={() => setCreating(true)} aria-label="Create playlist"><Plus size={19} /></button></div>
-    <LibraryTabs activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} />
-    {creating && <form className="sf-emergent-create-box" onSubmit={handleCreate}><strong>Create New Playlist</strong><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Midnight Beats 2026" /><div><button type="button" onClick={() => setCreating(false)}>Cancel</button><button type="submit">Create</button></div></form>}
-    <div className="sf-emergent-library-list">
-      <Link to="/liked-songs" className="sf-emergent-library-row sf-emergent-library-row--liked"><span className="sf-emergent-library-icon"><Heart size={21} fill="currentColor" /></span><span><strong>Liked Songs</strong><small>{likedSongs.length} songs</small></span><ChevronRight size={18} /></Link>
-      <button type="button" className="sf-emergent-library-row" onClick={() => navigate('/local-files')}><span className="sf-emergent-library-icon sf-emergent-library-icon--local"><FolderOpen size={21} /></span><span><strong>Device Audio Files</strong><small>{localSongs.length} tracks</small></span><ChevronRight size={18} /></button>
-      {playlists.map((playlist) => <Link key={playlist.id} to={`/playlist/${playlist.id}`} className="sf-emergent-library-row"><span className="sf-emergent-library-icon"><ListMusic size={21} /></span><span><strong>{playlist.name}</strong><small>{playlist.trackIds?.length || 0} songs</small></span><ChevronRight size={18} /></Link>)}
+      {!user ? (
+        <div className="text-center mt-4 mb-8 p-4 bg-surface-elevated rounded-lg">
+          <p className="text-text-muted mb-4 text-sm">Sign in to create playlists and like songs.</p>
+          <button onClick={signIn} className="bg-brand text-black font-bold px-6 py-2.5 rounded-full">
+            Sign in with Google
+          </button>
+        </div>
+      ) : (
+        <>
+          {creating && (
+            <div className="flex gap-2 mb-4">
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                placeholder="Playlist name"
+                className="flex-1 bg-surface-elevated rounded px-3 py-2 text-sm outline-none"
+              />
+              <button onClick={handleCreate} className="bg-brand text-black font-bold px-4 rounded text-sm">
+                Create
+              </button>
+            </div>
+          )}
+
+          <Link to="/liked-songs" className="flex items-center gap-3 py-2">
+            <div className="sf-library-icon sf-library-icon--liked">
+              <Heart size={18} fill="white" className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Liked Songs</p>
+              <p className="text-xs text-text-subdued">Playlist</p>
+            </div>
+          </Link>
+
+          {playlists.map((p) => (
+          <Link key={p.id} to={`/playlist/${p.id}`} className="sf-library-card flex items-center gap-3">
+              <div className="sf-library-icon">
+                <ListMusic size={18} className="text-text-subdued" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">{p.name}</p>
+                <p className="text-xs text-text-subdued">Playlist • {p.trackIds?.length || 0} songs</p>
+              </div>
+            </Link>
+          ))}
+        </>
+      )}
+
+      <div className="h-px bg-border my-6" />
+
+      <LocalFilesSection />
     </div>
-    <button type="button" className="sf-emergent-create-pill" onClick={() => setCreating(true)}><Plus size={18} /> + Create Playlist</button>
-  </div>
-}
-
-function LibraryTabs({ activeTab, setActiveTab, navigate }) {
-  return <div className="sf-emergent-library-tabs">{LIBRARY_TABS.map((tab) => <button key={tab} type="button" className={activeTab === tab ? 'is-active' : ''} onClick={() => { setActiveTab(tab); if (tab === 'Local Files') navigate('/local-files') }}>{tab}</button>)}</div>
+  )
 }

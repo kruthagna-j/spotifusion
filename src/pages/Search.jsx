@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import TrackRow from '@/components/TrackRow'
 import { SkeletonRowList } from '@/components/Skeleton'
-import SearchDiscovery from '@/pages/SearchDiscovery'
 
 const HISTORY_KEY = 'spotifusion:search-history'
 const MAX_HISTORY = 8
@@ -96,11 +95,19 @@ export default function Search() {
 
   if (!user) {
     return (
-      <div className="sf-emergent-search-page">
-        <label className="sf-emergent-search-input"><SearchIcon size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search songs, artists, albums..." aria-label="Search for songs, artists, or albums" /><button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={15} /></button></label>
-        <div className="sf-emergent-category-row">{['All', 'Songs', 'Albums', 'Artists', 'Jukebox'].map((category) => <button key={category} type="button" className={category === 'All' ? 'is-active' : ''}>{category}</button>)}</div>
-        <div className="sf-emergent-search-auth"><SearchIcon size={28} /><h1>Sign in to search</h1><p>Searching and streaming online songs requires a free account. Your local files remain available without an account.</p><button type="button" onClick={signIn}>Sign in with Google</button></div>
-        <SearchDiscovery history={history} onSelect={setQuery} onClear={clearHistory} />
+      <div className="p-4 md:p-6 flex flex-col items-center text-center pt-20">
+        <SearchIcon size={40} className="text-text-subdued mb-4" aria-hidden="true" />
+        <h1 className="text-xl font-bold mb-2">Sign in to search</h1>
+        <p className="text-text-muted text-sm max-w-sm mb-6">
+          Searching and streaming online songs requires a free account. Your own local files don't
+          — check the Local Files tab if you just want to play files from this device.
+        </p>
+        <button
+          onClick={signIn}
+          className="bg-brand hover:bg-brand-hover text-black font-bold px-6 py-2.5 rounded-full transition-colors"
+        >
+          Sign in with Google
+        </button>
       </div>
     )
   }
