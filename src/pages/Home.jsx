@@ -1,55 +1,37 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Search, SlidersHorizontal, Play, MoreVertical, ChevronRight, FolderOpen, Heart, Plus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, SlidersHorizontal, Play, MoreVertical, ChevronRight, FolderOpen, Sparkles, Heart, Plus } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useRecentlyPlayedStatus, usePlaylistsStatus } from '@/hooks/useLibraryData'
 import { useLocalSongs } from '@/lib/localMusicDb'
 import { usePlayer } from '@/context/PlayerContext'
 
-const CATEGORIES = ['All', 'Songs', 'Albums', 'Artists', 'Jukebox']
+const CATEGORY_PILLS = ['All', 'Songs', 'Albums', 'Artists', 'Jukebox']
 
 export default function Home() {
+  const navigate = useNavigate()
   const { user, signIn } = useAuth()
-  const { data: recent = [], loading: recentLoading } = useRecentlyPlayedStatus(user?.uid, 8)
+  const { data: historyTracks = [], loading: historyLoading } = useRecentlyPlayedStatus(user?.uid, 12)
   const { data: playlists = [], loading: playlistsLoading } = usePlaylistsStatus(user?.uid)
-  const [localSongs] = useLocalSongs()
-  const player = usePlayer()
-  const [category, setCategory] = useState('All')
-  const [menuId, setMenuId] = useState(null)
+  const [localTracks] = useLocalSongs()
+  const { playTrack, currentTrack, isPlaying, toggleLikeTrack, likedTrackIds, openAddToPlaylist } = usePlayer()
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [activeMenu, setActiveMenu] = useState(null)
+  const tracks = historyTracks.length ? historyTracks : localTracks
 
-  const tracks = recent.length ? recent : localSongs
-  const play = (track, list = tracks) => player.playTrack(track, list)
+  function chooseCategory(category) {
+    setSelectedCategory(category)
+    if (category === 'Jukebox') navigate('/player')
+    else if (category !== 'All') navigate(`/search?category=${category}`)
+  }
 
-  return (
-    <div className="emergent-home" data-testid="home-screen-view">
-      <header className="emergent-screen-header">
-        <div><h1>Spotifusion</h1><p>Your music, your way</p></div>
-        <Link to="/settings" className="emergent-header-button" aria-label="Settings"><SlidersHorizontal size={18} /></Link>
-      </header>
-      <Link to="/search" className="emergent-search-banner"><Search size={18} /><span>Search songs, artists, albums...</span></Link>
-      <div className="emergent-pill-row">
-        {CATEGORIES.map((item) => <button key={item} className={category === item ? 'is-active' : ''} onClick={() => item === 'Jukebox' ? player.openNowPlaying() : setCategory(item)}>{item}</button>)}
-      </div>
-      <section className="emergent-local-banner">
-        <div className="emergent-local-copy"><div className="emergent-local-icon"><FolderOpen size={20} /></div><div><strong>Play Local Device Audio <small>No upload needed</small></strong><p>{localSongs.length ? `${localSongs.length} local tracks ready` : 'Open MP3/WAV files on your device'}</p></div></div>
-        <Link to="/local-files" className="emergent-action-button">Open Files</Link>
-      </section>
-      <section className="emergent-section">
-        <div className="emergent-section-heading"><h2>Featured playlists</h2><Link to="/playlists">See all <ChevronRight size={14} /></Link></div>
-        <div className="emergent-card-row">
-          {playlistsLoading && <div className="emergent-skeleton-card" />}
-          {!playlistsLoading && playlists.length === 0 && <Link to="/library" className="emergent-feature-card emergent-feature-card--empty"><Plus size={24} /><strong>Create your first playlist</strong></Link>}
-          {playlists.slice(0, 6).map((playlist) => <Link key={playlist.id} to={`/playlist/${playlist.id}`} className="emergent-feature-card"><div className="emergent-feature-art">♫</div><strong>{playlist.name}</strong><small>{playlist.trackIds?.length || 0} songs</small></Link>)}
-        </div>
-      </section>
-      <section className="emergent-section">
-        <div className="emergent-section-heading"><h2>Recently played</h2><span>{recentLoading ? 'Loading...' : 'Jump back in'}</span></div>
-        <div className="emergent-track-list">
-          {tracks.slice(0, 8).map((track) => <div key={track.id} className={`emergent-track-row ${player.currentTrack?.id === track.id ? 'is-current' : ''}`} onClick={() => play(track)}><button className="emergent-track-art" aria-label={`Play ${track.title}`}><img src={track.thumbnail} alt="" /><Play size={15} fill="currentColor" /></button><div className="emergent-track-copy"><strong>{track.title}</strong><small>{track.artist}</small></div><button className="emergent-icon-action" onClick={(event) => { event.stopPropagation(); player.toggleLikeTrack(track) }} aria-label="Like track"><Heart size={16} /></button><button className="emergent-icon-action" onClick={(event) => { event.stopPropagation(); setMenuId(menuId === track.id ? null : track.id) }} aria-label="Track menu"><MoreVertical size={16} /></button>{menuId === track.id && <div className="emergent-track-menu"><button onClick={() => player.openAddToPlaylist(track)}><Plus size={14} /> Add to playlist</button><Link to="/lyrics" onClick={() => play(track)}><span>♪</span> View lyrics</Link></div>}</div>)}
-          {!tracks.length && <div className="emergent-empty-card">Search for music or add local audio to start listening.</div>}
-        </div>
-      </section>
-      {!user && <section className="emergent-auth-card"><div><strong>Build your library</strong><p>Sign in to save liked songs, playlists, and listening history.</p></div><button onClick={signIn}>Sign in</button></section>}
-    </div>
-  )
+  return <div data-testid="home-screen-view" className="flex-1 w-full p-4 space-y-5 pb-6 text-white">
+    <div className="flex items-center justify-between pt-1"><div><h1 data-testid="home-header-title" className="text-2xl font-black tracking-tight text-white">Spotifusion</h1><p className="text-[11px] text-slate-400">Stream music & local audio</p></div><button onClick={() => navigate('/settings')} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300" aria-label="Settings"><SlidersHorizontal size={18} /></button></div>
+    <button data-testid="home-search-bar-trigger" onClick={() => navigate('/search')} className="flex items-center gap-3 p-3 px-4 rounded-2xl bg-[#141724] hover:bg-[#1a1e30] border border-white/10 text-slate-400 cursor-pointer shadow-lg w-full text-left"><Search size={18} className="text-purple-400" /><span className="text-xs font-medium">Search songs, artists, albums...</span></button>
+    <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">{CATEGORY_PILLS.map((category) => <button key={category} onClick={() => chooseCategory(category)} className={`px-4 py-1.5 rounded-full text-xs font-bold shrink-0 ${selectedCategory === category ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-[#141724] text-slate-300 border border-white/5'}`}>{category}</button>)}</div>
+    <div className="glass-card bg-gradient-to-r from-purple-950/40 via-[#16132b]/60 to-slate-900/40 p-3.5 rounded-2xl border border-purple-500/20 flex items-center justify-between gap-3"><div className="flex items-center gap-3 min-w-0"><div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0"><FolderOpen size={20} /></div><div className="min-w-0"><h4 className="text-xs font-bold text-white truncate">Play Local Device Audio</h4><p className="text-[11px] text-slate-400 truncate">{localTracks.length ? `${localTracks.length} local track(s) ready` : 'Open MP3/WAV files on your device'}</p></div></div><button onClick={() => navigate('/local-files')} className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shrink-0">Open Files</button></div>
+    <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-base font-bold">Featured</h2><button onClick={() => navigate('/playlists')} className="text-xs font-semibold text-purple-400 flex items-center gap-0.5">See all <ChevronRight size={14} /></button></div><div className="flex gap-3 overflow-x-auto scrollbar-none py-1">{playlistsLoading && [1,2,3].map((x) => <div key={x} className="w-36 h-40 rounded-2xl bg-white/5 animate-pulse shrink-0" />)}{!playlistsLoading && playlists.length === 0 && <button onClick={() => navigate('/library')} className="w-36 h-40 rounded-2xl bg-gradient-to-br from-purple-800 to-indigo-950 border border-white/10 shrink-0 flex flex-col items-center justify-center gap-2 text-xs font-bold"><Plus size={20} />Create playlist</button>}{playlists.slice(0, 6).map((playlist) => <button key={playlist.id} onClick={() => navigate(`/playlist/${playlist.id}`)} className="w-36 shrink-0 rounded-2xl overflow-hidden bg-[#151928] border border-white/10 p-2.5 text-left"><div className="relative aspect-square rounded-xl overflow-hidden mb-2 bg-gradient-to-br from-purple-700 to-indigo-950 flex items-center justify-center text-4xl text-purple-200/30">♫</div><h3 className="text-xs font-bold truncate">{playlist.name}</h3><p className="text-[10px] text-purple-300 truncate mt-0.5">{playlist.trackIds?.length || 0} songs</p></button>)}</div></section>
+    <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-base font-bold">Recently Played</h2><span className="text-[11px] text-slate-400">{historyLoading ? 'Loading...' : 'Jump back in'}</span></div><div className="space-y-2">{tracks.slice(0, 8).map((track) => <div key={track.id} onClick={() => playTrack(track, tracks)} className={`flex items-center justify-between p-2.5 rounded-2xl cursor-pointer border transition-all group relative ${currentTrack?.id === track.id ? 'bg-purple-950/40 border-purple-500/40' : 'bg-[#121524]/70 border-white/5'}`}><div className="flex items-center gap-3 min-w-0 flex-1"><div className="relative w-12 h-12 rounded-xl overflow-hidden bg-slate-800 shrink-0"><img src={track.thumbnail} alt="" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100">{currentTrack?.id === track.id && isPlaying ? <span className="text-purple-300">•••</span> : <Play size={16} fill="currentColor" />}</div></div><div className="min-w-0"><h4 className="text-sm font-bold truncate">{track.title}</h4><p className="text-xs text-slate-400 truncate mt-0.5">{track.artist}</p></div></div><div className="flex items-center gap-1 shrink-0 ml-2"><button onClick={(event) => { event.stopPropagation(); toggleLikeTrack(track) }} className={`p-1.5 rounded-full ${likedTrackIds.has(track.id) ? 'text-purple-400' : 'text-slate-500'}`} aria-label="Like track"><Heart size={16} fill={likedTrackIds.has(track.id) ? 'currentColor' : 'none'} /></button><button onClick={(event) => { event.stopPropagation(); setActiveMenu(activeMenu === track.id ? null : track.id) }} className="p-1.5 rounded-full text-slate-400" aria-label="Track menu"><MoreVertical size={16} /></button>{activeMenu === track.id && <div className="absolute right-3 top-14 bg-[#1b192e] border border-purple-500/30 rounded-2xl p-1.5 shadow-2xl z-30 min-w-[170px] text-xs"><button onClick={() => openAddToPlaylist(track)} className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-white/10 text-left"><Plus size={14} className="text-purple-400" />Add to Playlist</button><button onClick={() => { playTrack(track, tracks); navigate('/lyrics') }} className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-white/10 text-left text-purple-300"><Sparkles size={14} />View Lyrics</button></div>}</div></div>)}{!tracks.length && <div className="rounded-2xl border border-dashed border-purple-500/30 p-6 text-center text-xs text-slate-400">Search for music or add local audio to start listening.</div>}</div></section>
+    {!user && <div className="rounded-2xl border border-purple-500/20 bg-[#141224] p-4 flex items-center justify-between gap-3"><div><strong className="text-xs">Build your library</strong><p className="text-[11px] text-slate-400 mt-1">Sign in to save songs and playlists.</p></div><button onClick={signIn} className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold">Sign in</button></div>}
+  </div>
 }
