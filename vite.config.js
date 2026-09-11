@@ -51,6 +51,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: true,
+    allowedHosts: ['4173-ixt2nyqh1loxqgjm42tuf-0fae927d.sg2.manus.computer'],
   },
 })
