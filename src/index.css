@@ -365,3 +365,29 @@ input:focus-visible,
 .emergent-search-page > .relative svg { color: #c084fc; }
 .emergent-search-page .bg-surface-elevated { border: 1px solid rgba(255,255,255,.07); background: rgba(18,21,36,.75); }
 .emergent-search-page .bg-white { background: #141724; }
+
+/* Direct Emergent PhoneSimulator composition. */
+.emergent-phone-simulator { min-height: 100dvh; width: 100%; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; background: #030509; color: #fff; }
+.emergent-simulator-bar { display: flex; width: min(100% - 2rem, 56rem); align-items: center; justify-content: space-between; gap: 1rem; margin: 1rem 0 .6rem; padding: .65rem 1rem; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; background: rgba(13,16,26,.9); box-shadow: 0 20px 45px rgba(0,0,0,.35); }
+.emergent-brand-lockup { display: flex; align-items: center; gap: .6rem; }
+.emergent-brand-icon { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .7rem; background: linear-gradient(45deg,#9333ea,#ec4899); }
+.emergent-brand-lockup strong, .emergent-brand-lockup span { display: block; }
+.emergent-brand-lockup strong { font-size: .8rem; font-weight: 900; }
+.emergent-brand-lockup strong small { margin-left: .25rem; padding: .12rem .3rem; border: 1px solid rgba(168,85,247,.3); border-radius: .25rem; color: #d8b4fe; font-size: .5rem; }
+.emergent-brand-lockup span { margin-top: .15rem; color: #85899d; font-size: .6rem; }
+.emergent-simulator-actions { display: flex; align-items: center; gap: .4rem; }
+.emergent-simulator-actions button { display: inline-flex; align-items: center; gap: .3rem; padding: .45rem .6rem; border: 1px solid rgba(255,255,255,.08); border-radius: .65rem; background: rgba(255,255,255,.05); color: #cbd0df; font-size: .6rem; font-weight: 700; }
+.emergent-simulator-actions button:hover { background: rgba(147,51,234,.2); }
+.emergent-quick-nav { display: flex; width: min(100% - 2rem, 56rem); align-items: center; gap: .35rem; margin-bottom: .6rem; overflow-x: auto; scrollbar-width: none; }
+.emergent-quick-nav::-webkit-scrollbar { display: none; }
+.emergent-quick-nav b { flex: none; margin-right: .25rem; color: #73778b; font-size: .6rem; text-transform: uppercase; }
+.emergent-quick-nav button { flex: none; padding: .35rem .6rem; border: 0; border-radius: .55rem; background: rgba(255,255,255,.05); color: #85899d; font-size: .6rem; }
+.emergent-quick-nav button.is-active { background: #9333ea; color: #fff; font-weight: 800; }
+.emergent-phone-frame { position: relative; display: flex; width: 100%; max-width: 26rem; height: calc(100dvh - 7.2rem); min-height: 35rem; flex-direction: column; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 2rem; background: #07090e; box-shadow: 0 25px 90px rgba(0,0,0,.8); }
+.emergent-device-status { display: flex; flex: none; align-items: center; justify-content: space-between; height: 1.7rem; padding: 0 1rem; background: #07090e; color: #a8adbd; font-size: .6rem; font-weight: 800; }
+.emergent-device-main { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.emergent-device-main::-webkit-scrollbar { display: none; }
+.emergent-device-main.is-immersive { overflow: hidden; }
+.emergent-persistent-bottom { display: flex; flex: none; flex-direction: column; }
+.emergent-frame-close { position: fixed; top: 1rem; right: 1rem; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid rgba(255,255,255,.1); border-radius: 9999px; background: rgba(255,255,255,.07); color: #fff; }
+@media (max-width: 767px) { .emergent-simulator-bar, .emergent-quick-nav { display: none; } .emergent-phone-frame { height: 100dvh; min-height: 0; border: 0; border-radius: 0; } }
