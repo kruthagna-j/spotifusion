@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
+const basePath = process.env.VITE_BASE_PATH || '/'
+
 export default defineConfig({
   plugins: [
     react(),
@@ -16,7 +18,7 @@ export default defineConfig({
         name: 'Spotifusion',
         short_name: 'Spotifusion',
         description: 'A free music player — stream music search results and your own local audio files.',
-        start_url: '/',
+        start_url: basePath,
         display: 'standalone',
         background_color: '#000000',
         theme_color: '#000000',
@@ -40,6 +42,7 @@ export default defineConfig({
       },
     }),
   ],
+  base: basePath,
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
